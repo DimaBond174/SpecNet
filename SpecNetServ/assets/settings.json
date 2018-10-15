@@ -1,0 +1,20 @@
+{
+"ServPassword" :"simple server self-identification + check whether the avatar can sign with his private key this text",
+"SQLitePath"   :"./db/SQLite/specnet.db",
+"LogPath"      :"./log/log.txt",
+"MessagesPath" :"./db/msg",
+"AvaCertsPath" :"./db/x509",
+"LogSizeMB"    :"10",
+"LogFiles"     :"3",
+"ServerPort"   :"1741",
+"LogLevel"     :"5",
+"idleConnLife" :"50",
+"MaxConnections":"1000",
+"SSLcertificate_file":"./assets/ssl_cert.pem",
+"SSLPrivateKey_file" :"./assets/ssl_pkey.pem",
+"GroupsCertsPath" :"./assets/x509",
+"SpecGroupID0"  :"2000000000000000000",
+"SpecGroupID1"  :"1891716358585508223",
+"SpecGroupID2"  :"0",
+"SpecGroupID3"  :"0"
+}
