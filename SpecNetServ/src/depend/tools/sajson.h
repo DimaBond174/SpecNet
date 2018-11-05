@@ -147,9 +147,9 @@ namespace sajson {
 
         class allocated_buffer {
         public:
-            allocated_buffer()
-                : memory(0)
-            {}
+            //allocated_buffer()
+            //    : memory(0)
+            //{}
 
             explicit allocated_buffer(size_t length) {
                 // throws std::bad_alloc upon allocation failure
@@ -210,8 +210,9 @@ namespace sajson {
             }
 
             struct layout {
-                size_t refcount;
-                char data[];
+                size_t refcount=0;
+              //  char data[];
+				char *data=nullptr;
             };
 
             layout* memory;

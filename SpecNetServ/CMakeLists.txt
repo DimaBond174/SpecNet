@@ -1,50 +1,24 @@
 cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
-project(SpecNetServ)
+project(SpecNetServ) 
 set(SpecNetServ_VERSION  "1.0")
 set(SpecNetServ_SERVICE  "specnetserv")
 set(SpecNetServ_INSTALL_FOLDER "../SpecNetDir")
-set(CLANG_PATH "/usr/local/clang_6.0.1")
+
 set(SPEC_TESTS "ON")
 
-#add_definitions(-std=c++17)
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -stdlib=libc++ -nostdinc++")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -stdlib=libc++ -Wall -pedantic")
-# так не видит features.h set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -stdlib=libc++ -Wall -pedantic -nostdlib -nostdlibinc")
-# так ошибка DSO set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -stdlib=libc++ -Wall -pedantic -nostdlib")
-# так не создаёт исполняемых файлов:
-# You can call -c on clang to just compile the object for you without linking.
-#set(CMAKE_CXX_FLAGS "-std=c++17 -MMD -Wall -pedantic -nostdlib  -fno-omit-frame-pointer -c  ")
-#set(CMAKE_C_FLAGS "-MMD -Wall -pedantic -nostdlib  -fno-omit-frame-pointer -c ")
-#так :-1: ошибка: /usr/local/clang_6.0.1/lib/libc++.a(locale.cpp.o): undefined reference to symbol 'strtoull_l@@GLIBC_2.3.3'
-#set(CMAKE_CXX_FLAGS "-std=c++17 -MMD -Wall -pedantic -nostdlib  -fno-omit-frame-pointer  ")
-#set(CMAKE_C_FLAGS "-MMD -Wall -pedantic -nostdlib  -fno-omit-frame-pointer ")
-# static понимает но не компилит т.к. sqlite хочет грузить  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -static -stdlib=libc++ -Wall -pedantic")
-# так сервис не находит libc++ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -stdlib=libc++ -Wall -pedantic")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 ")
-
-
-#set(CMAKE_GENERATOR_CC clang-cl)
-# Compiler
-set(CMAKE_CXX_COMPILER clang++)
-set(CMAKE_C_COMPILER clang)
-#set(CLANG_INCLUDE ${CLANG_PATH}/include/c++/v1)
-
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CLANG_PATH}/include/c++/v1")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -L${CLANG_PATH}/lib/*.*")
-
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,-rpath,${CLANG_PATH}/lib")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -nodefaultlibs -lc++ -lc++abi -lm -lc -lgcc_s -lgcc -lc++experimental -lstdc++fs")
+if (MSVC)
+	message(STATUS "Windows MSVC configure")
+	set (CMAKE_BUILD_TYPE "Debug")	
+else()
+	message(STATUS "Clang configure")
+	set(CMAKE_CXX_COMPILER clang++)
+	set(CMAKE_C_COMPILER clang)
+	set(CLANG_PATH "/usr/local/clang_6.0.1")
+endif (MSVC)
 
 # Please set project flawors there:
 include(cmake/options.cmake)
 include(cmake/functions.cmake)
-
-# Src files for SpecNetServ:
-#add_executable(${PROJECT_NAME}
-#    ${SPEC_SRC}
-#    )
-#set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_FLAGS "-std=c++17")
-#custom_enable_cxx17(${PROJECT_NAME})
 
 
 # Coping assets (TODO any change&rerun CMake to copy):
@@ -76,17 +50,6 @@ FOREACH(file ${SpecLibs})
     FILE(COPY ${CMAKE_CURRENT_SOURCE_DIR}/libs/${filename} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/libs)
 ENDFOREACH()
 
-#TODO manually copy files for test cases because that don't works:
-#set(DIRS_TO_COPY
-#    ${CMAKE_CURRENT_SOURCE_DIR}/libs
-#    ${CMAKE_CURRENT_SOURCE_DIR}/assets
-#    )
-#install(DIRECTORY ${DIRS_TO_COPY} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-#install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/assets
-#    DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets
-#    FILES_MATCHING PATTERN "*.*")
-#install(DIRECTORY assets/ DESTINATION assets2
-#        FILES_MATCHING PATTERN "*.*")
 
 custom_add_executable(${PROJECT_NAME}
     "${SPEC_SRC}"
@@ -95,27 +58,10 @@ custom_add_executable(${PROJECT_NAME}
     "${SPEC_LINK_LIBS}"
     "${SPEC_PROPERTIES}")
 
-#target_compile_definitions(${PROJECT_NAME}
-#    PRIVATE
-#    SPEC_VERSION="${SpecNetServ_VERSION}"
-#    SPEC_SERVICE="${SpecNetServ_SERVICE}"
 
-#    PUBLIC
-#    ${SPEC_DEFINITIONS}
 
-#    INTERFACE
-#)
-
-#set_target_properties(${PROJECT_NAME}
-#    PROPERTIES
-#    ${SPEC_PROPERTIES}
-#)
 
 message(STATUS "target_link_libraries: ${SPEC_LINK_LIBS}")
-#target_link_libraries(${PROJECT_NAME}
-#    ${SPEC_LINK_LIBS}
-#    )
-
 
 
 # Print CXX compiler information

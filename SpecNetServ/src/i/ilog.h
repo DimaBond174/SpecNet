@@ -3,9 +3,7 @@
 
 #include <string>
 #include <cstdio>
-#if defined(Windows)
-#define snprintf sprintf_s
-#endif
+
 
 
 class ILog {
@@ -21,18 +19,28 @@ public:
      * tag = where
      * fmt + args = what
     */
+#if defined(Windows)
+	template<typename ... Args>
+	void log(const char * lvl, const char * fmt, Args ... args) {
+		char buf[1024];
+		if (0 < sprintf_s(buf, 1024, fmt, args...)) {
+			rawLog(lvl, buf);
+		}
+	}
+#else
     template<typename ... Args>
     void log(const char * lvl, const char * fmt, Args ... args) {
-        auto szData = std::snprintf(nullptr, 0, fmt, args...);
+        auto szData = snprintf(nullptr, 0, fmt, args...);
         if (szData > 0) {
             ++szData; //include \0
             std::string strData;
             strData.reserve(szData);
             strData.resize(szData-1);
-            std::snprintf(&strData.front(), szData, fmt, args...);            
+            snprintf(&strData.front(), szData, fmt, args...);            
             rawLog(lvl, strData);
         }
     }
+#endif
 };
 
 #endif // ILOG_H

@@ -16,6 +16,7 @@ public:
     int _socket_id =-1;
     //int _events =0;
     int connectState = 0; //0=not, 1=TCP, 2=SSL, 3=Authenticated
+    //groupID in network byte order:
     unsigned long long connectedGroup = 0;
     time_t lastActTime = 0;
 
@@ -26,7 +27,7 @@ public:
 
     /* WRITE packet */
     char * writePacket = nullptr;
-    long writeLenLeft = 0;
+    int writeLenLeft = 0;
     char * writeCur = nullptr;
 
 };

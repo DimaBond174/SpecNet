@@ -109,7 +109,7 @@ void SpecContext::onStopSig() {
 SpecContext::SpecContext() : keepRun(false) {}
 
 SpecContext::~SpecContext() {
-    onStopSig();
+    //onStopSig();
 }
 
 

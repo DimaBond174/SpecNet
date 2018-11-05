@@ -2,4 +2,5 @@
 /*
 !.gitignore
 !SpecNetServ/
-
+SpecNetServ/CMakeSettings.json
+SpecNetServ/.vs

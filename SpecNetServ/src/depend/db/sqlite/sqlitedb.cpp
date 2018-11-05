@@ -121,9 +121,9 @@ bool SQLiteDB::createDB() {
                  "PRIMARY KEY (id_group, id_avatar));",
         "create table IF NOT EXISTS t_messages (date_msg integer NOT NULL, "\
                 "id_msg integer NOT NULL, "\
-                "id_group integer NOT NULL, "\                
+                "id_group integer NOT NULL, "\
                 "remote_id_avatar integer NOT NULL, "\
-                "my_id_avatar integer NOT NULL, "\                
+                "my_id_avatar integer NOT NULL, "\
                 "PRIMARY KEY (date_msg,id_msg,id_group));",
         "create index IF NOT EXISTS ix_messages1_to ON t_messages (id_group, remote_id_avatar, date_msg);",
         "create table IF NOT EXISTS t_path (date_msg integer NOT NULL, "\

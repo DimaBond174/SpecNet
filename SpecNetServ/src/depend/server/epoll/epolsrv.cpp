@@ -34,11 +34,16 @@ EpolSrv::~EpolSrv() {
 bool  EpolSrv::start() {
     bool re = false;
     SpecContext & sr = SpecContext::instance();
-    iEncrypt = sr.iEncrypt.get();
-    iLog = sr.iLog.get();
-    iAlloc = sr.iAlloc.get();
-    iFileAdapter = sr.iFileAdapter.get();
-    iDB = sr.iDB.get();
+	p_iEncrypt = sr.iEncrypt;
+	iEncrypt = sr.iEncrypt.get();
+	p_iLog = sr.iLog;
+	iLog = sr.iLog.get();
+	p_iAlloc = sr.iAlloc;
+	iAlloc = sr.iAlloc.get();
+	p_iFileAdapter = sr.iFileAdapter;
+	iFileAdapter = sr.iFileAdapter.get();
+	p_iDB = sr.iDB;
+	iDB = sr.iDB.get();
     if (iFileAdapter && iAlloc && iLog && iEncrypt && iDB &&
             0==srvState.load(std::memory_order_acquire) &&
             create_socket()) {
@@ -299,70 +304,75 @@ void EpolSrv::handleRead(EpolSocket * s) {
     iLog->log("i","[EpolSrv::handleRead]: s=%i", s->_socket_id);
 #endif
     int res = 0;
-    if (!s->readPacket) {
-        /* loading just header */
-        char buf[SPEC_LEN_HEAD_2];
-        res = iEncrypt->readSocket(s->sslStaff, buf, SPEC_LEN_HEAD_2);
-//        char buf[1024];
-//        res = iEncrypt->readSocket(s->sslStaff, buf, 1024);
-        if (res > 0) {
-            /* check packet header */
-            long len = IPack0::eatPacket(buf, res);
-            if (len<=0) {
-                setFreeSocket3(s);
-                if (logLevel>2) {
-                    iLog->log("e","[EpolSrv::handleRead]: IPack0::eatPacket(%i)=%ld",
-                          s->_socket_id, len);
+    //faux loop
+    do {
+        if (!s->readPacket) {
+            /* loading just header */
+            char buf[sizeof(T_IPack0_Network)];
+            res = iEncrypt->readSocket(s->sslStaff, buf, sizeof(T_IPack0_Network));
+            if (sizeof(T_IPack0_Network) ==res) {
+                s->readPacket = IPack0::eatPacket(iAlloc , buf);
+                if (!s->readPacket) {
+                    //ohNoFreeRam();
+                    setFreeSocket3(s);
+#ifdef Debug
+    iLog->log("e","[EpolSrv::handleRead]: NULL==IPack0::eatPacket(), s=%i", s->_socket_id);
+#endif
+                    break;
                 }
-                return;
+                s->readCur = s->readPacket + sizeof(T_IPack0_Network);
+                s->readLenLeft = ((T_IPack0_Network *)(s->readPacket))->pack_len - sizeof(T_IPack0_Network);
+                s->lastActTime = std::time(nullptr);
+            } else {
+                if (res>0 || ISSL_ERROR_WANT_READ != iEncrypt->getSocketState(s->sslStaff, res)) {
+                    setFreeSocket3(s);
+                }
+                break;
             }
-            /* allocate len for packet */
-            s->readPacket = (char *)iAlloc->specAlloc(len+SPEC_LEN_HEAD_1);
-            if (!s->readPacket) {
-                ohNoFreeRam();
-                return;
-            }
-            s->readCur = s->readPacket + SPEC_LEN_HEAD_1;
-            s->readLenLeft = len;
-            /* fist bytes == len */
-            *((uint32_t*)(s->readPacket)) = len;
-            s->lastActTime = std::time(nullptr);
-        } else {
-//            if (setEncryptWants(s, res)) {
-//            } else {
-//                setFreeSocket3(s);
-//            }
-            if (ISSL_ERROR_WANT_READ != iEncrypt->getSocketState(s->sslStaff, res)) {
-                setFreeSocket3(s);
-            }
-            return;
-        }
-    }
+        }   //if (!s->readPacket)
 
-    while(0<(res = iEncrypt->readSocket(s->sslStaff,
-                                       s->readCur,
-                                       s->readLenLeft))) {
+        /* load packet body */
+        while(0<(res = iEncrypt->readSocket(s->sslStaff,
+                                           s->readCur,
+                                           s->readLenLeft))) {
+            s->readLenLeft -= res;
+            s->readCur += res;
+            if (0==s->readLenLeft) { break;}
+        }//while
 
-        s->readLenLeft -= res;
-        s->readCur += res;
+        /* parse packet body */
         if (0==s->readLenLeft) {
             /* all readed */
-//            uint32_t * headers = (uint32_t *)s->readPacket;
-//            long size = headers[0];
-//            long type = ntohl(headers[1]);
-            uint32_t type = IPack0::getTypeIn(s->readPacket);            
+            //Check packet END:
+            T_IPack0_Network * pack0 = ((T_IPack0_Network *)(s->readPacket));
+            uint32_t * endMark = (uint32_t *)(s->readPacket + pack0->pack_len - sizeof(uint32_t));
+            if (N_SPEC_MARK_E!=*endMark) {
+#ifdef Debug
+    iLog->log("e","[EpolSrv::handleRead]: N_SPEC_MARK_E!=endMark, s=%i", s->_socket_id);
+#endif
+                setFreeSocket3(s);
+                break;
+            }
 
-            switch (type) {
+            switch (pack0->pack_type) {
             case SPEC_PACK_TYPE_2:
-            case SPEC_PACK_TYPE_7:
-                if (3==s->connectState &&
-                        IPack1::getGroupIn(s->readPacket)==s->connectedGroup) {
-                    //TODO
-                    /* send mail from file cache */
+                if (3==s->connectState && s->connectedGroup==
+                        ((T_IPack1_Network *)(s->readPacket))->groupID) {
                     /* send X509 from file cache */
-                } else {
+                    //TODO
+                } else  {
                     //Protocol error
-                    s->stop();
+                    setFreeSocket3(s);
+                }
+                break;
+            case SPEC_PACK_TYPE_7:
+                if (3==s->connectState && s->connectedGroup==
+                        ((T_IPack6_Network *)(s->readPacket))->groupID) {
+                    /* send X509 from file cache */
+                    //TODO
+                } else  {
+                    //Protocol error
+                    setFreeSocket3(s);
                 }
                 break;
             default:
@@ -375,21 +385,17 @@ void EpolSrv::handleRead(EpolSocket * s) {
                 iAlloc->specFree(s->readPacket);
                 s->readPacket = nullptr;
             }
-
-
             break;
         }
-    }//while
 
-    if (res<=0) {
-//        if (!setEncryptWants(s, res)) {
-//            setFreeSocket3(s);
-//        }
-        if (ISSL_ERROR_WANT_READ != iEncrypt->getSocketState(s->sslStaff, res)) {
-            setFreeSocket3(s);
+        /* parse errors */
+        if (res<=0) {
+            if (ISSL_ERROR_WANT_READ != iEncrypt->getSocketState(s->sslStaff, res)) {
+                setFreeSocket3(s);
+            }
         }
-    }
-}
+    } while (false);
+} //handleRead
 
 void EpolSrv::setFreeSocket3(EpolSocket * s) {
     setFreeSocket2(s);    
@@ -533,8 +539,12 @@ void EpolSrv::servThreadLoop(){
     srvState.store(2, std::memory_order_release);
     while (keepRun.load(std::memory_order_acquire)) {
         int n = epoll_wait(epollfd, activeEvs, EPOLL_WAIT_POOL, WAIT_TIME);
-        for (int i = n-1; i >= 0; --i) {            
+        for (int i = n-1; i >= 0; --i) { 
+			//Есть подозрение, что в этом месте рушится инфа о наследовании:
             IEpoll * s = reinterpret_cast<IEpoll*>(activeEvs[i].data.ptr);
+			//TODO гля s->_epol_ev.data.ptr = dynamic_cast<IEpoll *>(s);
+			//TODO и замени на ВНЕШНЮЮ структуру которая без наследования
+			//тупо *ptr будет который я буду ПОТОМ кастить к Cli или Serv чётко, САМ
             /* check if it alive */
             if (CLI_TYPE == s->sockType) {
                  /* Clients epoll handle */
@@ -652,6 +662,10 @@ void EpolSrv::handleSockets() {
 //#ifdef Debug
 //    iLog->log("i","[EpolSrv::handleSockets]: s=%i, state=%i", (*it)->_socket_id, state);
 //#endif
+
+		//!!!!!!!!!!!! TODO !!!!!!!!!!!!!!!!!!
+		//Write должен срабатывать только есл epol вернул соккет как готовый писать
+		//иначе нет гарантии что он сможет, произойдёт АХЗ
         bool isAlive = state > ESOCK_FREE1 && (srvEpoll.lastActTime-p->lastActTime)<=idleConnLife;
         if (isAlive && ESOCK_WANT_WRITE==state) {
             /* want write */
@@ -673,31 +687,27 @@ bool EpolSrv::goWritePacket(EpolSocket * s) {
     bool re = true;
     ++s->state;
     s->writePacket = s->getPacket();
+    T_IPack0_Network * pack0 = (T_IPack0_Network *)(s->writePacket);
     if (s->writePacket) {
-        if (SPEC_PACK_TYPE_6==IPack0::getTypeOut(s->writePacket)) {
+        if (N_SPEC_PACK_TYPE_6==pack0->pack_type) {
             /* The server checked the certificate and allowed the work */
             s->connectState = 3;
-            s->connectedGroup = IPack6::getOutGroupID(s->writePacket);
+            //groupID in network byte order
+            s->connectedGroup = //IPack6::getOutGroupID(s->writePacket);
+                    ((T_IPack6_Network *)(s->writePacket))->groupID;
         }
 //#ifdef Debug
 //    iLog->log("i","[EpolSrv::goWritePacket]: [s=%i]: exist packet", s->_socket_id);
 //#endif
-        s->writeLenLeft = IPack0::lenPacket(s->writePacket);
-        if (s->writeLenLeft <=0) {
+        s->writeLenLeft = _NTOHL(pack0->pack_len);
+        if (0>=s->writeLenLeft) {
 #ifdef Debug
             iLog->log("e","[goWritePacket]: s->writeLenLeft <=0.");
 #endif
             s->writePacket = nullptr;
             re = false;
         } else {
-#ifdef Debug
-    std::string str (s->writePacket+SPEC_LEN_HEAD_3, s->writeLenLeft-SPEC_LEN_HEAD_1);
-    iLog->log("i","[EpolSrv::goWritePacket]: [s=%i]: %s", s->_socket_id, str.c_str());
-#endif
-            s->writeLenLeft+=SPEC_LEN_HEAD_2;
             s->writeCur = s->writePacket;
-//            int oldev = s->_events;
-            //s->_events  |= EPOLLOUT;
             if ((EPOLLIN | EPOLLOUT | EPOLLERR)!=s->_epol_ev.events) {
                 s->_epol_ev.events = EPOLLIN | EPOLLOUT | EPOLLERR;
                 updateEPoll(s);

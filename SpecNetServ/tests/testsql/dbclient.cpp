@@ -161,8 +161,8 @@ bool DBClient::createDB() {
                  "PRIMARY KEY (id_group, id_avatar));",
         "create table IF NOT EXISTS t_messages (date_msg integer NOT NULL, "\
                 "id_msg integer NOT NULL, "\
-                "id_group integer NOT NULL, "\                
-                "remote_id_avatar integer NOT NULL, "\                
+                "id_group integer NOT NULL, "\
+                "remote_id_avatar integer NOT NULL, "\
                 "my_id_avatar integer NOT NULL, "\
                 "PRIMARY KEY (date_msg,id_msg,id_group));",
         "create index IF NOT EXISTS ix_messages1_to ON t_messages (id_group, remote_id_avatar, date_msg);",
@@ -433,11 +433,11 @@ char * DBClient::getMsgType9(uint64_t id_group, uint64_t id_msg, uint64_t date_m
             T_IPack9_struct outPacket9;
             outPacket9.str = msg.data();
             outPacket9.strLen = msg.size();
-            outPacket9.guid1 = id_group;
-            outPacket9.guid2 = id_msg;
-            outPacket9.guid3 = date_msg;
-            outPacket9.guid4 = sqlite3_column_int64(stmtGetMsgType9, 0);
-            outPacket9.guid5 = sqlite3_column_int64(stmtGetMsgType9, 1);
+            outPacket9.guids[0] = id_group;
+            outPacket9.guids[1] = id_msg;
+            outPacket9.guids[2] = date_msg;
+            outPacket9.guids[3] = sqlite3_column_int64(stmtGetMsgType9, 0);
+            outPacket9.guids[4] = sqlite3_column_int64(stmtGetMsgType9, 1);
             re = IPack9::createPacket(_iAlloc, outPacket9, SPEC_PACK_TYPE_9);
     } while (false);
     return re;

@@ -13,6 +13,7 @@
 #include <poll.h>
 #include <queue>
 
+
 //#include <openssl/rand.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -82,7 +83,7 @@ private:
     int tcpConnect (const char* host, const char* port);
     int handleRead();
     int handleWrite();
-    void _putPackToSend(char * ptr, uint32_t len) ;
+    void _putPackToSend(char * ptr) ;
     X509 * extractX509  (const void *x509, int len);
     bool verify_it(const void* msg, size_t mlen, const void* sig, size_t slen, EVP_PKEY* evpX509);
 };

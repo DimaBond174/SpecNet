@@ -11,7 +11,7 @@ public:
     void onCmd(int argc, char** argv);    
     bool sendCmdStatus(const char * serviceName, const char * cmd);
 private:
-    const char * TAG = "LinuxService";
+    const char * const TAG = "LinuxService";
     std::function<void()> _f_startContext;
     bool startSpecNetServ();
     void printHelp();

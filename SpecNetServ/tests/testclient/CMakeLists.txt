@@ -51,6 +51,7 @@ set (CUR_DEFINITIONS
 #    SPEC_SERVICE="${SpecNetServ_SERVICE}"
 #    SPEC_EXECUTIVE="${PROJECT_NAME}"
 #    ${CMAKE_BUILD_TYPE}
+	${CMAKE_SYSTEM_NAME}
     ${SPEC_DEFINITIONS}
     )
 
@@ -61,11 +62,26 @@ set (CUR_DEFINITIONS
 #    "${CUR_LINK_LIBS}"
 #    "${CUR_PROPERTIES}")
 
+if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
+   message(STATUS "Linux was chosen ")
+
+elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
+   message(STATUS "Windows was chosen ")
+   
+      set(CUR_LINK_LIBS
+             ${LIB_LINK_LIBS}
+             Ws2_32
+         )
+
+   	set(CUR_DEFINITIONS
+	${CUR_DEFINITIONS}
+	"WIN32_LEAN_AND_MEAN")
+endif()
 
 set(CUR_TEST "testclient1")
 set (CUR_DEFINITIONS
     SPEC_CLI_N=1
-    ${SPEC_DEFINITIONS}
+    ${CUR_DEFINITIONS}
     )
 custom_add_executable(${CUR_TEST}
     "${CUR_SRC}"
@@ -77,7 +93,7 @@ custom_add_executable(${CUR_TEST}
 set(CUR_TEST "testclient2")
 set (CUR_DEFINITIONS
     SPEC_CLI_N=2
-    ${SPEC_DEFINITIONS}
+    ${CUR_DEFINITIONS}
     )
 custom_add_executable(${CUR_TEST}
     "${CUR_SRC}"
@@ -89,7 +105,7 @@ custom_add_executable(${CUR_TEST}
 set(CUR_TEST "testclient3")
 set (CUR_DEFINITIONS
     SPEC_CLI_N=3
-    ${SPEC_DEFINITIONS}
+    ${CUR_DEFINITIONS}
     )
 custom_add_executable(${CUR_TEST}
     "${CUR_SRC}"

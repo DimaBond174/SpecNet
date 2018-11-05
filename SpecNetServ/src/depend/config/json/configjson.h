@@ -4,7 +4,7 @@
 #include <map>
 #include "i/iconfig.h"
 #include "depend/config/hardcode/confighardcode.h"
-#include "depend/tools/sajson.h"
+#include "depend/tools/specjson.h"
 
 class ConfigJson : public IConfig {
 public:
@@ -17,7 +17,7 @@ private:
     ConfigHardCode defConfig;
     std::map<std::string, std::string> mapConfig;
 
-    void traverse(const std::string & key, const sajson::value& node);
+    void traverse(TNode * node);
 };
 
 #endif // CONFIGJSON_H

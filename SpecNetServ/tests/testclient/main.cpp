@@ -54,11 +54,13 @@ int waitForJobResult(){
     return res;
 }
 
-long long getCurJavaTime() {
-    struct timespec timeout;
-    clock_gettime(0, &timeout);
-    return (long long)((timeout.tv_sec) * 1000LL + timeout.tv_nsec/1000000);
+
+uint64_t getCurJavaTime() {
+	int64_t re = std::chrono::duration_cast<std::chrono::milliseconds>
+		(std::chrono::system_clock::now().time_since_epoch()).count();
+	return re;
 }
+
 
 bool generateMessage(){
     long long id_msg = libSSL->getGUID09();
@@ -172,8 +174,8 @@ int doType6(char * answ) {
     T_IPack6_struct inPacket6;
     //faux loop
     do {
-        if (!IPack6::parsePackI(inPacket6, answ)
-                || curGroupID!=*(inPacket6.groupID)) {break;}
+        if (!IPack6::parsePackI(inPacket6, answ))  {break;}
+        if (curGroupID!=inPacket6.groupID) {break;}
         if (inPacket6.lenArray>0) {
             /* check if i need that mail */
             // We need only messages which i have not
@@ -229,8 +231,8 @@ int doType7(char * answ) {
     T_IPack6_struct inPacket7;
     //faux loop
     do {
-        if (!IPack6::parsePackI(inPacket7, answ)
-                || curGroupID!=*(inPacket7.groupID)) {break;}
+        if (!IPack6::parsePackI(inPacket7, answ)) {break;}
+        if (curGroupID!=inPacket7.groupID) {break;}
         if (inPacket7.lenArray>0) {
             /* send msg-s */
             for (uint32_t i = 0 ; i<inPacket7.lenArray; ++i){
@@ -253,8 +255,8 @@ int doType8(char * answ) {
     T_IPack6_struct inPacket8;
     //faux loop
     do {
-        if (!IPack6::parsePackI(inPacket8, answ)
-                || curGroupID!=*(inPacket8.groupID)) {break;}
+        if (!IPack6::parsePackI(inPacket8, answ)) {break;}
+        if (curGroupID!=inPacket8.groupID) {break;}
         if (inPacket8.lenArray>0) {
             /* store unwanded */
             if (!libSQL->storeNotNeedArray(curGroupID,
@@ -275,12 +277,12 @@ int doType9(char * answ) {
     T_IPack9_struct inPacket9;
     //faux loop
     do {
-        if (!IPack9::parsePackI(inPacket9, answ)
-                || curGroupID!=inPacket9.guid1) {break;}
+        if (!IPack9::parsePackI(inPacket9, answ)) {break;}
+        if (curGroupID!=inPacket9.guids[0]) {break;}
         if (inPacket9.strLen>0) {
             /* store Msg */
-            if (libSQL->storeMessage(curGroupID, inPacket9.guid4, inPacket9.guid5,
-                                      inPacket9.guid2, inPacket9.guid3, inPacket9.str, inPacket9.strLen)) {
+            if (libSQL->storeMessage(curGroupID, inPacket9.guids[3], inPacket9.guids[4],
+                                      inPacket9.guids[1], inPacket9.guids[2], inPacket9.str, inPacket9.strLen)) {
                 //Send confirmation
                 inPacket9.strLen = 0;
                 char * pack = IPack9::createPacket(&iAlloc, inPacket9, SPEC_PACK_TYPE_10);
@@ -303,9 +305,9 @@ int doType10(char * answ) {
     T_IPack9_struct inPacket9;
     //faux loop
     do {
-        if (!IPack9::parsePackI(inPacket9, answ)
-                || curGroupID!=inPacket9.guid1) {break;}
-        if (!libSQL->storeNotNeed(curGroupID, inPacket9.guid2, inPacket9.guid3)) {break;}
+        if (!IPack9::parsePackI(inPacket9, answ)) {break;}
+        if (curGroupID!=inPacket9.guids[0]) {break;}
+        if (!libSQL->storeNotNeed(curGroupID, inPacket9.guids[1], inPacket9.guids[2])) {break;}
 
         std::this_thread::yield();
 
@@ -316,9 +318,8 @@ int doType10(char * answ) {
 
 int parsePack() {
     int re = 0;
-    char * answ = libSSL->readPack();
-    uint32_t type = IPack0::getTypeIn(answ);
-    switch (type) {
+    char * answ = libSSL->readPack();    
+    switch  (((T_IPack0_Network *)(answ))->pack_type)  {
     case 2:
         //The server  requests unknown certificate X509
         re =doType2(answ);
@@ -348,7 +349,7 @@ int parsePack() {
         re =doType10(answ);
         break;
     default:
-        std::cerr << "[parsePack] Error: type="<<type << std::endl;
+        std::cerr << "[parsePack] Error: type" << std::endl;
         break;
     }
     libSSL->eraseReadPack();
@@ -437,14 +438,19 @@ int main()
 
     pathEnd = pathFull + SMAX_PATH -1;
     pathSuffix = printString(iSystem.get()->getExePath().c_str(), pathFull, pathEnd);
-    pathSuffix = printString("/", pathSuffix, pathEnd);
-
-    //ILibClass<TestLib> testLibLoader(iSystem, "/home/dbond/workspace3/SpecNetDir/libs/libtestlib.so");
+#if defined(Windows)
+	pathSuffix = printString("\\", pathSuffix, pathEnd);
+	printString("libs\\testssl.dll", pathSuffix, pathEnd);
+	ILibClass<TestSSL> testSSL(iSystem, pathFull);
+	printString("libs\\testsql.dll", pathSuffix, pathEnd);
+	ILibClass<TestSQL> testSQL(iSystem, pathFull);
+#else
+    pathSuffix = printString("/", pathSuffix, pathEnd);    
     printString("libs/libtestssl.so", pathSuffix, pathEnd);
     ILibClass<TestSSL> testSSL(iSystem, pathFull);
     printString("libs/libtestsql.so", pathSuffix, pathEnd);
     ILibClass<TestSQL> testSQL(iSystem, pathFull);
-
+#endif
     //faux loop
     do {
         if (!testSSL.i) {

@@ -20,6 +20,7 @@ set(SPEC_ENCRYPT DSpecSSL)
 # Server implementation module:
 #set(SPEC_SERV DDefServer)
 set(SPEC_SERV DEpollServer)
+#set(SPEC_SERV DSelectServer)
 
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     set(SPEC_BUILD DDEBUG)
@@ -30,6 +31,7 @@ endif ()
 # Configuration of the assembly
 #   according to the selected components:
 set(SPEC_DEFINITIONS
+	${SPEC_DEFINITIONS}
     ${CMAKE_SYSTEM_NAME}
     ${SPEC_LOGGER}
     ${SPEC_DB}
@@ -51,11 +53,7 @@ set(SPEC_INCLUDE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
 
-set(SPEC_LINK_LIBS
-    pthread
-    stdc++fs
-#    c++experimental
-    )
+
 
 #link_directories(${CMAKE_CURRENT_SOURCE_DIR}/libs)
 
@@ -95,7 +93,7 @@ if("${SPEC_DB}" STREQUAL "DSQLiteDB")
     set(SPEC_LINK_LIBS
         ${SPEC_LINK_LIBS}
         sqlite3
-        dl
+        #dl
     )
     set(SPEC_SRC ${SPEC_SRC}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/depend/db/sqlite/sqlitedb.cpp
@@ -112,7 +110,7 @@ if("${SPEC_ENCRYPT}" STREQUAL "DSpecSSL")
        ${CMAKE_CURRENT_SOURCE_DIR}/src/depend/encrypt/boringssl/include
        )
    file(GLOB_RECURSE LOC_SRC
-#       ${CMAKE_CURRENT_SOURCE_DIR}/src/depend/encrypt/boringssl/*.h
+#       ${CMAKE_CURRENT_SOURCE_DIR}/src/depend/encrypt/boringssl/*.h 
        ${CMAKE_CURRENT_SOURCE_DIR}/src/depend/encrypt/boringssl/*.cpp
    )
    set(SPEC_SRC ${SPEC_SRC}  ${LOC_SRC})
@@ -145,6 +143,19 @@ if("${SPEC_ENCRYPT}" STREQUAL "DSpecSSL")
             ssl
             PROPERTIES IMPORTED_LOCATION
             ${CMAKE_CURRENT_SOURCE_DIR}/static/libssl.a )
+	elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
+        set_target_properties( # Specifies the target library.
+            crypto
+            PROPERTIES IMPORTED_LOCATION
+            ${CMAKE_CURRENT_SOURCE_DIR}/static/crypto.lib )
+        set_target_properties( # Specifies the target library.
+            decrepit
+            PROPERTIES IMPORTED_LOCATION
+            ${CMAKE_CURRENT_SOURCE_DIR}/static/decrepit.lib )
+        set_target_properties( # Specifies the target library.
+            ssl
+            PROPERTIES IMPORTED_LOCATION
+            ${CMAKE_CURRENT_SOURCE_DIR}/static/ssl.lib )
     endif()
 endif()
 
@@ -156,13 +167,17 @@ if("${SPEC_SERV}" STREQUAL "DEpollServer")
         ${CMAKE_CURRENT_SOURCE_DIR}/src/depend/server/epoll/*.cpp
     )
     set(SPEC_SRC ${SPEC_SRC}  ${LOC_SRC})
-elseif("${SPEC_SERV}" STREQUAL "DDefServer")
-    message(STATUS "DDefServer was chosen ")
+elseif("${SPEC_SERV}" STREQUAL "DSelectServer")
+    message(STATUS "DSelectServer was chosen ")
     file(GLOB_RECURSE LOC_SRC
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/depend/server/default/*.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/depend/server/default/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/depend/server/select/*.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/depend/server/select/*.cpp
     )
     set(SPEC_SRC ${SPEC_SRC}  ${LOC_SRC})
+	#https://bugs.freedesktop.org/show_bug.cgi?id=71297
+	set(SPEC_DEFINITIONS
+	${SPEC_DEFINITIONS}
+	FD_SETSIZE=1024)
 endif()
 
 
@@ -178,7 +193,14 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
    set(SPEC_LINK_LIBS
              ${SPEC_LINK_LIBS}
              dl
+			 pthread
+			 stdc++fs
          )
+#set(SPEC_LINK_LIBS
+#    pthread
+#    stdc++fs
+##    c++experimental
+#    )
 
 #add_library(c++ STATIC IMPORTED)
 #add_library(c++abi STATIC IMPORTED)
@@ -199,6 +221,9 @@ elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
        ${CMAKE_CURRENT_SOURCE_DIR}/src/depend/system/windows/*.cpp
    )
    set(SPEC_SRC ${SPEC_SRC}  ${LOC_SRC})
+   	set(SPEC_DEFINITIONS
+	${SPEC_DEFINITIONS}
+	"WIN32_LEAN_AND_MEAN")
 endif()
 
 # Sources

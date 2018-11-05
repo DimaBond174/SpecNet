@@ -15,6 +15,14 @@
 #include "spec/specstatic.h"
 #include <iostream>
 
+#if defined(Windows)
+#include <direct.h>
+#ifndef PATH_MAX 
+#define PATH_MAX _MAX_PATH
+#endif // !
+
+#endif
+
 FileAdapter::FileAdapter() { }
 
 
@@ -108,8 +116,11 @@ void FileAdapter::mkdirsS(const std::string& filePath) {
         if (*p == '/' || *p == '\\') {
             /* Temporarily truncate */
             *p = '\0';
-
-            if (mkdir(_path, S_IRWXU) != 0) {
+#if defined(Windows)
+            if (_mkdir(_path) != 0) {
+#else
+			if (mkdir(_path, S_IRWXU) != 0) {
+#endif
                 if (errno != EEXIST)
                     return;
             }
@@ -118,7 +129,11 @@ void FileAdapter::mkdirsS(const std::string& filePath) {
         }
     }
 
-    if (mkdir(_path, S_IRWXU) != 0) {
+#if defined(Windows)
+	if (_mkdir(_path) != 0) {
+#else
+	if (mkdir(_path, S_IRWXU) != 0) {
+#endif    
         if (errno != EEXIST)
             return;
     }
@@ -205,7 +220,11 @@ bool FileAdapter::mkdir_p(const char * filePath){
     while (*filePath && p<end) {
         if ('/'==*filePath || '\\'==*filePath) {
             *p = 0;
-            if (mkdir(_path, S_IRWXU) != 0) {
+#if defined(Windows)
+			if (_mkdir(_path) != 0) {
+#else
+			if (mkdir(_path, S_IRWXU) != 0) {
+#endif              
                 if (errno != EEXIST)
                     return false;
             }

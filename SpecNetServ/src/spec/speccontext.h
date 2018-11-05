@@ -30,7 +30,7 @@ public:
                std::shared_ptr <IServer> && _iServer,
                std::shared_ptr <IAlloc> && _iAlloc
                 );
-    //Stop all SpecNetServ-s (all forks):
+    //Stop all:
     void stop();
 
     //Internal stop:

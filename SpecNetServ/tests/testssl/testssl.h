@@ -25,7 +25,7 @@ public:
     virtual bool checkAvaSign(const void* msg, size_t mlen, const void* sig, size_t slen) = 0;
     virtual long long getGUID09() = 0;
 private:
-    const char * TAG = "TestSSL";    
+    const char * const TAG = "TestSSL";    
 };
 
 

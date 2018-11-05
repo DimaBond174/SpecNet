@@ -138,8 +138,8 @@ void EpolSocket::workThreadLoop(){
 
 bool EpolSocket::parsePack(char * ptr) {
     bool re = false;
-    uint32_t type = IPack0::getTypeIn(ptr);
-    switch (type) {
+    //uint32_t type = IPack0::getTypeIn(ptr);
+    switch (((T_IPack0_Network *)(ptr))->pack_type) {
     case SPEC_PACK_TYPE_1:
         re = doPack1(ptr);
         break;
@@ -207,7 +207,7 @@ bool EpolSocket::setCurX509(const void *buf, int num) {
 }
 
 bool EpolSocket::doPack1(char * ptr) {
-    bool re = false;
+    bool re = true;//false;
 
     T_IPack1_struct inPacket1;
     //faux loop
@@ -224,6 +224,7 @@ bool EpolSocket::doPack1(char * ptr) {
         outPacket4.str = nullptr;
         outPacket4.strLen = 0;
         char * tmp = nullptr;
+
         if (iEncrypt->groupX509exists(inPacket1.groupID)) {
             char certPath[SMAX_PATH];
             char * certPathSuffix = certPath;
@@ -232,7 +233,7 @@ bool EpolSocket::doPack1(char * ptr) {
             certPathSuffix = printULong(inPacket1.groupID, certPathSuffix, certPathEnd);
             *certPathSuffix='/';++certPathSuffix;
             certPathSuffix = printULong(inPacket1.avatarID, certPathSuffix, certPathEnd);
-            const std::string & x509str = iFileAdapter->loadFileF(certPath);
+            const std::string & x509str = iFileAdapter->loadFileF(certPath);            
             if (x509str.empty()) {
                 /* Ask for cert */
                 char * pack2 = IPack1::createPacket(iAlloc, inPacket1.groupID, inPacket1.avatarID, SPEC_PACK_TYPE_2);
@@ -244,6 +245,7 @@ bool EpolSocket::doPack1(char * ptr) {
             const std::string & servPass = _iServCallback->getServPassword();
             outPacket4.str = servPass.c_str();
             outPacket4.strLen = servPass.length();
+
             /* warn about servPass scope */
             tmp = IPack3::createPacket(iAlloc, outPacket4, SPEC_PACK_TYPE_4);
         } else {
@@ -351,9 +353,9 @@ bool EpolSocket::doPack6(char * ptr){
     //faux loop
     do {
         //Check if groupID is same with groupID we work with:
-        if (!IPack6::parsePackI(inPacket6 , ptr)
-                ||groupID!=*(inPacket6.groupID)
-                ||0==inPacket6.lenArray) { break;}
+        if (!IPack6::parsePackI(inPacket6 , ptr))  { break;}
+        if (groupID!=inPacket6.groupID
+                || 0==inPacket6.lenArray) { break;}
 
         // We need only messages which i have not
         uint64_t msgIDsNEED[MAX_SelectRows];
@@ -398,8 +400,8 @@ bool EpolSocket::doPack7(char * ptr){
     T_IPack6_struct inPacket7;
     //faux loop
     do {
-        if (!IPack6::parsePackI(inPacket7, ptr)
-                || groupID!=*(inPacket7.groupID)) {break;}
+        if (!IPack6::parsePackI(inPacket7, ptr)) {break;}
+        if (groupID!=inPacket7.groupID) {break;}
         if (inPacket7.lenArray>0) {
             /* send msg-s */
             char pathFull[SMAX_PATH];
@@ -419,12 +421,12 @@ bool EpolSocket::doPack7(char * ptr){
                 } else {
                     T_IPack9_struct outPacket9;
                     if (!iDB->getMsg(groupID, inPacket7.guid1s[i], inPacket7.guid2s[i],
-                                     &outPacket9.guid4, &outPacket9.guid5)) { continue;}
+                                     &outPacket9.guids[3], &outPacket9.guids[4])) { continue;}
                     outPacket9.str = msg.data();
                     outPacket9.strLen = msg.size();
-                    outPacket9.guid1 = groupID;
-                    outPacket9.guid2 = inPacket7.guid1s[i];
-                    outPacket9.guid3 = inPacket7.guid2s[i];
+                    outPacket9.guids[0] = groupID;
+                    outPacket9.guids[1] = inPacket7.guid1s[i];
+                    outPacket9.guids[2] = inPacket7.guid2s[i];
                     char * pack = IPack9::createPacket(iAlloc, outPacket9, SPEC_PACK_TYPE_9);
                     if (!pack) {break;}
                     writePack(pack);
@@ -442,8 +444,8 @@ bool EpolSocket::doPack8(char * ptr){
     T_IPack6_struct inPacket8;
     //faux loop
     do {
-        if (!IPack6::parsePackI(inPacket8, ptr)
-                || groupID!=*(inPacket8.groupID)) {break;}
+        if (!IPack6::parsePackI(inPacket8, ptr)) {break;}
+        if (groupID!=inPacket8.groupID) {break;}
         if (inPacket8.lenArray>0) {
             /* store unwanded */
             if (!iDB->storeNotNeedArray(groupID,
@@ -460,8 +462,8 @@ bool EpolSocket::doPack9(char * ptr){
     T_IPack9_struct inPacket9;
     //faux loop
     do {
-        if (!IPack9::parsePackI(inPacket9, ptr)
-                || groupID!=inPacket9.guid1) {break;}
+        if (!IPack9::parsePackI(inPacket9, ptr)) {break;}
+        if (groupID!=inPacket9.guids[0]) {break;}
         if (inPacket9.strLen>0) {
             /* store Msg */
             char pathFull[SMAX_PATH];
@@ -469,13 +471,13 @@ bool EpolSocket::doPack9(char * ptr){
             char * cur = printString(_iServCallback->getMessagesPath(), pathFull, pathEnd);
             cur = printULong(groupID, cur, pathEnd);
             *cur='/'; ++cur;
-            cur = printULong(TO12(inPacket9.guid3), cur, pathEnd);
+            cur = printULong(TO12(inPacket9.guids[2]), cur, pathEnd);
             *cur='/'; ++cur;
-            cur = printULong(inPacket9.guid2, cur, pathEnd);
-            cur = printULong(inPacket9.guid3, cur, pathEnd);
+            cur = printULong(inPacket9.guids[1], cur, pathEnd);
+            cur = printULong(inPacket9.guids[2], cur, pathEnd);
             if (-2==iFileAdapter->saveTFile(pathFull,inPacket9.str,inPacket9.strLen)) {break;}
-            if (iDB->storeMessage(groupID, inPacket9.guid4, inPacket9.guid5,
-                                      inPacket9.guid2, inPacket9.guid3)) {
+            if (iDB->storeMessage(groupID, inPacket9.guids[3], inPacket9.guids[4],
+                                      inPacket9.guids[1], inPacket9.guids[2])) {
                 //Send confirmation
                 inPacket9.strLen = 0;
                 char * pack = IPack9::createPacket(iAlloc, inPacket9, SPEC_PACK_TYPE_10);
@@ -494,9 +496,9 @@ bool EpolSocket::doPack10(char * ptr){
     T_IPack9_struct inPacket9;
     //faux loop
     do {
-        if (!IPack9::parsePackI(inPacket9, ptr)
-                || groupID!=inPacket9.guid1) {break;}
-        if (!iDB->addPath(inPacket9.guid2, inPacket9.guid3, groupID, avatarID)) {break;}
+        if (!IPack9::parsePackI(inPacket9, ptr)) {break;}
+        if (groupID!=inPacket9.guids[0]) {break;}
+        if (!iDB->addPath(inPacket9.guids[1], inPacket9.guids[2], groupID, avatarID)) {break;}
 
         re = true;
     } while(false);

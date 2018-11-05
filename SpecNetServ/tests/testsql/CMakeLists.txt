@@ -1,9 +1,12 @@
 set(CUR_TEST "testsql")
 #custom_add_library_from_dir(${CUR_TEST})
-set(LIB_SRC "")
+#set(LIB_SRC "")
 set(LIB_INCLUDES     ${CPP_INCLUDES})
-set(LIB_DEFINITIONS "")
+set(LIB_DEFINITIONS ${CMAKE_SYSTEM_NAME})
 set(LIB_LINK_LIBS "")
+
+file(GLOB LIB_SRC "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
+#set(ADD_TARGET_SRC ${ADD_TARGET_SRC} ${TARGET_SRC})
 
 #add_library(sqlite3pic
 # STATIC
@@ -13,10 +16,28 @@ set(LIB_LINK_LIBS "")
 #set_target_properties(sqlite3pic PROPERTIES COMPILE_FLAGS "-std=c++17 -fPIC  ")
 set(LIB_LINK_LIBS
     ${LIB_LINK_LIBS}
-    sqlite3
-    dl
+    sqlite3    
 )
 
+if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
+   message(STATUS "Linux was chosen ")
+   set(LIB_LINK_LIBS
+             ${LIB_LINK_LIBS}
+             dl
+         )
+
+elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
+   message(STATUS "Windows was chosen ")
+   
+      set(LIB_LINK_LIBS
+             ${LIB_LINK_LIBS}
+             Ws2_32
+         )
+
+   	set(LIB_DEFINITIONS
+	${LIB_DEFINITIONS}
+	"WIN32_LEAN_AND_MEAN")
+endif()
 
 set(LIB_INCLUDES
     ${LIB_INCLUDES}

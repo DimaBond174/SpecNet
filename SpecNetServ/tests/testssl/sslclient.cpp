@@ -327,41 +327,39 @@ int SSLClient::handleRead() {
     do {
         if (!readPacket) {
             /* loading just header */
-            char buf[SPEC_LEN_HEAD_2];
-            res = SSL_read(sslStaff, buf, SPEC_LEN_HEAD_2);
-            if (res >=0) {
-                /* check packet header */
-                long len = IPack0::eatPacket(buf, res);
-                if (len<=0) {
-                    std::cerr << "Error: [SSLClient::handleRead()] IPack0::eatPacket(%i)="
-                          << len << std::endl;
-                    re = SSL_CLI_ERROR;
-                    break;
-                }
-                /* allocate len for packet */
-                readPacket = (char *)_iAlloc->specAlloc(len+SPEC_LEN_HEAD_1);
+            char buf[sizeof(T_IPack0_Network)];
+            res = SSL_read(sslStaff, buf, sizeof(T_IPack0_Network));
+            if (sizeof(T_IPack0_Network) ==res) {
+                readPacket = IPack0::eatPacket(_iAlloc , buf);
                 if (!readPacket) {
-                    std::cerr << "Error: [SSLClient::handleRead()] null==iAlloc.specAlloc("
-                          << (len+SPEC_LEN_HEAD_1)  << std::endl;
+                    std::cerr << "Error: [SSLClient::handleRead()] null==IPack0::eatPacket()"
+                           << std::endl;
                     re = SSL_CLI_ERROR;
                     break;
                 }
-                readCur = readPacket + SPEC_LEN_HEAD_1;
-                readLenLeft = len;
-                /* fist bytes == len */
-                *((uint32_t*)(readPacket)) = len;
+
+                readCur = readPacket + sizeof(T_IPack0_Network);
+                readLenLeft = ((T_IPack0_Network *)(readPacket))->pack_len - sizeof(T_IPack0_Network);
                 lastActTime = std::time(nullptr);
             } else {
-                int errE = SSL_get_error(sslStaff, res);
-                if (SSL_ERROR_WANT_READ != errE ) {
-                     std::cerr << "Error: [SSLClient::handleRead()] SSL_read return error: "
-                           << errE << std::endl;
-                   re = SSL_CLI_ERROR;
-                   break;
-                 }
+                re = SSL_CLI_ERROR;
+                if (res > 0) {
+                    std::cerr << "Error: [SSLClient::handleRead()] Only part of T_IPack0_Network header was loaded"
+                           << std::endl;
+                } else {
+                    int errE = SSL_get_error(sslStaff, res);
+                    if (SSL_ERROR_WANT_READ != errE ) {
+                         std::cerr << "Error: [SSLClient::handleRead()] SSL_read return error: "
+                               << errE << std::endl;
+                        re = SSL_CLI_ERROR;
+                    }
+                }
+                break;
             }
         }
        re = SSL_CLI_READING;
+
+       /* load packet body */
        while(0<(res = SSL_read(sslStaff,
                                        readCur,
                                        readLenLeft))) {
@@ -371,6 +369,15 @@ int SSLClient::handleRead() {
             if (0==readLenLeft) {
                 /* all readed */
                 readWait = false;
+                //Check packet END:
+                T_IPack0_Network * pack0 = ((T_IPack0_Network *)(readPacket));
+                uint32_t * endMark = (uint32_t *)(readPacket + pack0->pack_len - sizeof(uint32_t));
+                if (N_SPEC_MARK_E!=*endMark) {
+                    std::cerr << "Error: [SSLClient::handleRead()] N_SPEC_MARK_E!=*endMark "
+                                << std::endl;
+                    re = SSL_CLI_ERROR;
+                    break;
+                }
                 re = SSL_CLI_READED;
                 break;
             }
@@ -391,8 +398,8 @@ int SSLClient::handleRead() {
     return re;
 }
 
-void SSLClient::_putPackToSend(char * ptr, uint32_t len) {
-    writeLenLeft = len + SPEC_LEN_HEAD_2;
+void SSLClient::_putPackToSend(char * ptr) {
+    writeLenLeft = _NTOHL(((T_IPack0_Network *)(ptr))->pack_len);
     writeCur = writePacket = ptr;
 }
 
@@ -409,7 +416,7 @@ int SSLClient::handleWrite(){
                 writePacket = nullptr;
                 if (!writeQueue.empty()) {
                     char * ptr = writeQueue.front();
-                    _putPackToSend(ptr, IPack0::lenPacket(ptr));
+                    _putPackToSend(ptr);
                     writeQueue.pop();
                 }
                 re = SSL_CLI_WRITED;
@@ -428,16 +435,15 @@ int SSLClient::handleWrite(){
 
 bool SSLClient::putPackToSend(char * ptr){
     bool re = false;    
-    uint32_t writeLen = IPack0::lenPacket(ptr);
-    if (writeLen>0) {
-        if (!writePacket) {
-            _putPackToSend(ptr, writeLen);
+
+    if (!writePacket) {
+            _putPackToSend(ptr);
             re = SSL_CLI_ERROR!= handleWrite();
-        } else {
+    } else {
             writeQueue.push(ptr);
             re = true;
-        }
     }
+
     return re;
 }
 
