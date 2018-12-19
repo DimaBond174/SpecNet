@@ -122,7 +122,7 @@ bool LinuxService::sendCmdStatus(const char * serviceName, const char * cmd) {
 
 
 void* LinuxService::runServThreadLoop(void* arg) {
-    LinuxService* service = reinterpret_cast<LinuxService*>(arg);
+    LinuxService* service = static_cast<LinuxService*>(arg);
     service->serviceThreadLoop();
     return 0;
 }

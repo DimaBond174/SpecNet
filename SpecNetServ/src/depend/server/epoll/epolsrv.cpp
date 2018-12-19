@@ -145,7 +145,7 @@ bool EpolSrv::create_socket() {
 }
 
 void* EpolSrv::runServThreadLoop(void* arg){
-    EpolSrv* p = reinterpret_cast<EpolSrv*>(arg);
+    EpolSrv* p = static_cast<EpolSrv*>(arg);
     p->servThreadLoop();
     return 0;
 }
@@ -217,25 +217,59 @@ bool EpolSrv::handleWrite(EpolSocket * s){
 #ifdef Debug
     iLog->log("i","[EpolSrv::handleWrite]: s=%i", s->_socket_id);
 #endif
-    bool re = true;
-    if (s->writePacket){
-        long res = iEncrypt->writeSocket(s->sslStaff, s->writeCur, s->writeLenLeft);
-        if (res > 0) {
-            s->writeCur+=res;
-            s->writeLenLeft -=res;
-            if (0==s->writeLenLeft) {
-                iAlloc->specFree(s->writePacket);
-                s->writePacket = nullptr;
-//                s->_events = EPOLLIN | EPOLLERR;
+    bool re = true;    
+    do {
+        if (s->writePacket){
+            long res = iEncrypt->writeSocket(s->sslStaff, s->writeCur, s->writeLenLeft);
+            if (res > 0) {
+                s->writeCur+=res;
+                s->writeLenLeft -=res;
+                if (0==s->writeLenLeft) {
+                    iAlloc->specFree(s->writePacket);
+                    s->writePacket = nullptr;
+                }
+            } else {
+//                if (ISSL_ERROR_WANT_WRITE!=iEncrypt->getSocketState(s->sslStaff, res)) {
+//                    re = false;//setEncryptWants(s, res);
+//                }
+                re = ISSL_ERROR_WANT_WRITE==iEncrypt->getSocketState(s->sslStaff, res);
+                break;
+            }
+        } else {
+            if (ESOCK_WANT_WRITE==s->state.load(std::memory_order_acquire)) {
+                goWritePacket(s);
+            }
+            //Nothing to write
+            if (!s->writePacket) {
                 if ((EPOLLIN | EPOLLERR)!=s->_epol_ev.events){
                     s->_epol_ev.events = EPOLLIN | EPOLLERR;
                     updateEPoll(s);
                 }
+                break;
             }
-        } else if (ISSL_ERROR_WANT_WRITE!=iEncrypt->getSocketState(s->sslStaff, res)) {
-            re = false;//setEncryptWants(s, res);
         }
-    }
+    } while(re);
+//    if (s->writePacket){
+//        long res = iEncrypt->writeSocket(s->sslStaff, s->writeCur, s->writeLenLeft);
+//        if (res > 0) {
+//            s->writeCur+=res;
+//            s->writeLenLeft -=res;
+//            if (0==s->writeLenLeft) {
+//                iAlloc->specFree(s->writePacket);
+//                s->writePacket = nullptr;
+////                s->_events = EPOLLIN | EPOLLERR;
+//                //if exists to write in socket queue?
+
+//                if ((EPOLLIN | EPOLLERR)!=s->_epol_ev.events){
+//                    s->_epol_ev.events = EPOLLIN | EPOLLERR;
+//                    updateEPoll(s);
+//                }
+//            }
+//        } else if (ISSL_ERROR_WANT_WRITE!=iEncrypt->getSocketState(s->sslStaff, res)) {
+//            re = false;//setEncryptWants(s, res);
+//        }
+//    }
+
     return re;
 }
 
@@ -539,8 +573,7 @@ void EpolSrv::servThreadLoop(){
     srvState.store(2, std::memory_order_release);
     while (keepRun.load(std::memory_order_acquire)) {
         int n = epoll_wait(epollfd, activeEvs, EPOLL_WAIT_POOL, WAIT_TIME);
-        for (int i = n-1; i >= 0; --i) { 
-			//Есть подозрение, что в этом месте рушится инфа о наследовании:
+        for (int i = n-1; i >= 0; --i) { 			
             IEpoll * s = reinterpret_cast<IEpoll*>(activeEvs[i].data.ptr);
 			//TODO гля s->_epol_ev.data.ptr = dynamic_cast<IEpoll *>(s);
 			//TODO и замени на ВНЕШНЮЮ структуру которая без наследования
@@ -554,22 +587,26 @@ void EpolSrv::servThreadLoop(){
                     setFreeSocket3(pS);
                     continue;
                 } else {
-                    int events = activeEvs[i].events;
-                    if (events & (EPOLLIN | EPOLLERR)) {
-                        if (2==s->connectState){
+                    if (s->connectState < 2){
+                        handleHandshake(pS);
+                    } else {
+                        int events = activeEvs[i].events;
+                        if (events & (EPOLLIN | EPOLLERR)) {
                             handleRead(pS);
-                        } else {
-                            handleHandshake(pS);
                         }
-                    } else if (events & EPOLLOUT) {
-                        if (2==s->connectState) {
-                            if (!handleWrite(pS)) {
-                                if (CLI_TYPE == s->sockType) {
+                        if (events & EPOLLOUT) {
+                           // if (pS->writePacket) {
+                                if (!handleWrite(pS)) {
                                     setFreeSocket3(pS);
                                 }
-                            }
-                        } else {
-                            handleHandshake(pS);
+                            //}
+//                            if (!pS->writePacket) {
+//                                if (ESOCK_WANT_WRITE==pS->state.load(std::memory_order_acquire)){
+//                                    if(!goWritePacket(pS)){
+//                                        setFreeSocket3(pS);
+//                                    }
+//                                }
+//                            }
                         }
                     }
                 }
@@ -587,39 +624,6 @@ void EpolSrv::servThreadLoop(){
                 keepRun.store(false, std::memory_order_release);
                 break;
             }
-
-//            int events = activeEvs[i].events;
-//            if (events & (EPOLLIN | EPOLLERR)) {
-//                if (server_socket==s->_socket_id) {
-//                    if (setAllSockets.size()<maxConnections || !setFreeSockets.empty()) {
-//                        handleAccept();
-//                    } else {
-//                        if(logLevel>2) {
-//                           iLog->log("w","[EpolSrv::servThreadLoop]: cant handleAccept() - no free connections in pool");
-//                        }
-//                    }
-//                } else if (2==s->connectState){
-//                    handleRead(s);
-//                } else {
-//                    handleHandshake(s);
-//                }
-//            } else if (events & EPOLLOUT) {
-//                if (server_socket==s->_socket_id) {
-//                    iLog->log("e","[EpolSrv::servThreadLoop]: тут не должен был оказаться");
-//                    keepRun.store(false, std::memory_order_release);
-//                } else if (2==s->connectState) {
-//                    if (!handleWrite(s)) {
-//                        if (CLI_TYPE == s->sockType) {
-//                            setFreeSocket3(s);
-//                        }
-//                    }
-//                } else {
-//                    handleHandshake(s);
-//                }
-//            } else if(logLevel>2) {
-//                iLog->log("w","[EpolSrv::servThreadLoop]: epoll_wait unknown event: %i", events);
-//            }
-
         } //for
 
         if (setWorkSockets.size()>0) {
@@ -670,7 +674,7 @@ void EpolSrv::handleSockets() {
         if (isAlive && ESOCK_WANT_WRITE==state) {
             /* want write */
                 if (!((*it)->writePacket)) {
-                    isAlive = goWritePacket(*it);
+                     goWritePacket(*it);
                 }
         }
 
@@ -683,12 +687,16 @@ void EpolSrv::handleSockets() {
     } //while inner
 }
 
-bool EpolSrv::goWritePacket(EpolSocket * s) {
-    bool re = true;
+void EpolSrv::goWritePacket(EpolSocket * s) {
+    //bool re = true;
     ++s->state;
-    s->writePacket = s->getPacket();
-    T_IPack0_Network * pack0 = (T_IPack0_Network *)(s->writePacket);
+    s->writePacket = s->getPacket();    
     if (s->writePacket) {
+        T_IPack0_Network * pack0 = (T_IPack0_Network *)(s->writePacket);
+#ifdef Debug
+      iLog->log("i","[EpolSrv::goWritePacket]: [s=%i]: pack_type=%d", s->_socket_id
+                , ntohl(pack0->pack_type));
+#endif
         if (N_SPEC_PACK_TYPE_6==pack0->pack_type) {
             /* The server checked the certificate and allowed the work */
             s->connectState = 3;
@@ -705,22 +713,25 @@ bool EpolSrv::goWritePacket(EpolSocket * s) {
             iLog->log("e","[goWritePacket]: s->writeLenLeft <=0.");
 #endif
             s->writePacket = nullptr;
-            re = false;
+           // re = false;
         } else {
             s->writeCur = s->writePacket;
             if ((EPOLLIN | EPOLLOUT | EPOLLERR)!=s->_epol_ev.events) {
                 s->_epol_ev.events = EPOLLIN | EPOLLOUT | EPOLLERR;
                 updateEPoll(s);
-            }
-            re = handleWrite(s);
+            }            
+            //re = handleWrite(s);
         }
     }
+//    else {
+//        re = false;
+//    }
 //    else {
 //#ifdef Debug
 //    iLog->log("i","[EpolSrv::goWritePacket]: [s=%i]: NOT exist packet", s->_socket_id);
 //#endif
 //    }
-    return re;
+//    return re;
 }
 
 void EpolSrv::stopAllSockets() {

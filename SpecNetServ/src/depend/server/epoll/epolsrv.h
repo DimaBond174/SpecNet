@@ -97,7 +97,7 @@ private:
     void setFreeSocket1(EpolSocket * s);
     void setFreeSocket2(EpolSocket * s);
     void setFreeSocket3(EpolSocket * s);
-    bool goWritePacket(EpolSocket * s);
+    void goWritePacket(EpolSocket * s);
     void stopAllSockets();    
     void updateEPoll(EpolSocket * s);
     bool handleWrite(EpolSocket * s);

@@ -26,8 +26,9 @@
 #define ESOCK_WANT_WRITE 4
 #define ESOCK_STOPPING   6
 
-class EpolSocket :  public IEpoll
-{
+//class EpolSocket :  public IEpoll
+//TODO SockHolder чтобы не шарить в таблице наследования
+class EpolSocket {
 public:
     EpolSocket(IServCallback * iServCallback, int logLevel);
    // EpolSocket(int logLevel);

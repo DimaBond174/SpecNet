@@ -83,7 +83,8 @@ void EpolSocket::freeResourcesLocal() {
 }
 
 void* EpolSocket::runWorkThreadLoop(void* arg) {
-    EpolSocket* p = reinterpret_cast<EpolSocket*>(arg);
+    //EpolSocket* p = reinterpret_cast<EpolSocket*>(arg);
+    EpolSocket* p = static_cast<EpolSocket*>(arg);
     p->workThreadLoop();
     return 0;
 }

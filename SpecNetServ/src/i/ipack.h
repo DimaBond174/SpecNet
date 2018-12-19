@@ -407,6 +407,15 @@ struct {
     T_IPack0_Network header;
     uint32_t  strLen;
     uint64_t  guids[5];
+    //PRIMARY KEY (date_msg,id_msg,id_group)
+    //This order is used by OCache to search by key:
+    //    uint64_t  guids[0]; //date_msg
+    //    uint64_t  guids[1]; //id_msg
+    //    uint64_t  guids[2]; //id_group
+    //    uint64_t  guids[3]; //remote_id_avatar
+    //    uint64_t  guids[4]; //my_id_avatar
+ПЕределай в вышеуказанном порядке всё для высоколселективности
+
 //    uint64_t  guid1; //id_group
 //    uint64_t  guid2; //id_msg
 //    uint64_t  guid3; //date_msg
