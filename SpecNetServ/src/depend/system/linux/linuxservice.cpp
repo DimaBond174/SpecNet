@@ -199,12 +199,20 @@ void LinuxService::serviceThreadLoop() {
         /* Register SIGTERM listener */
         regSIGhandler();
 
+        //to prevent OpenSSL SIGPIPE
+        //signal(SIGPIPE, SIG_IGN);
 
         /* Going to start SERVER: */
-        if (!sr.iEncrypt.get()->start()) {
-            sr.iLog.get()->log("e","[%s]: FAIL iEncrypt.get()->start().",TAG);
+        sr.specSSL   = std::make_shared<SpecSSL>(sr.iLog.get(),
+                                              sr.iFileAdapter.get(), sr.iConfig.get());
+        if (!sr.specSSL.get()->start()) {
+            sr.iLog.get()->log("e","[%s]: FAIL specSSL->start().",TAG);
             break;
         }
+//        if (!sr.specSSL.get()->start()) {
+//            sr.iLog.get()->log("e","[%s]: FAIL iEncrypt.get()->start().",TAG);
+//            break;
+//        }
         if (!sr.iServer.get()->start()) {
             sr.iLog.get()->log("e","[%s]: FAIL iServer->start().",TAG);
             break;
@@ -301,6 +309,7 @@ void LinuxService::goFork() {
     //TODO: Implement a working signal handler */
     signal(SIGCHLD, SIG_IGN);
     signal(SIGHUP, SIG_IGN);
+
     /* Register SIGTERM listener */
     //regSIGhandler();
 

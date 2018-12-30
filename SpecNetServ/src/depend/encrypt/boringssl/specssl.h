@@ -8,7 +8,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-#include "i/iencrypt.h"
+
 #include "i/ilog.h"
 #include "i/ifileadapter.h"
 #include "i/iconfig.h"
@@ -18,31 +18,31 @@
  * Tips:
     BoringSSL disables renegotiation by default.
 */
-class SpecSSL : public IEncrypt
-{
+//class SpecSSL : public IEncrypt
+class SpecSSL {
 public:
-    SpecSSL();
-    bool  start() override;
-    void  stop()  override;
+    SpecSSL(ILog * iLog_, IFileAdapter * iFileAdapter_, IConfig * iConfig_);
+    bool  start() ;
+    void  stop()  ;
 
 
-    void * startEncryptSocket(int socket) override;
-    void stopEncryptSocket(void * staff) override;
-    int getSocketState(void * staff, int code) override;
-    int do_handshakeSocket(void * staff) override;
-    int readSocket(void * staff, void *buf, int num) override;
-    int writeSocket(void * staff, const void *buf, int num) override;
-    void logErrors() override;
-    bool groupX509exists(unsigned long long groupID) override;
+    SSL * startEncryptSocket(int socket) ;
+    //void stopEncryptSocket(SSL * staff) ;
+    //int getSocketState(SSL * staff, int code) ;
+    //int do_handshakeSocket(SSL * staff) ;
+    //int readSocket(SSL * staff, void *buf, int num) ;
+    //int writeSocket(SSL * staff, const void *buf, int num) ;
+    void logErrors() ;
+    bool groupX509exists(unsigned long long groupID) ;
 
 
-    X509 * getX509(const void *buf, int num) override;
-    EVP_PKEY * getX509evp(X509 * x509) override;
-    void freeX509(X509 * x509) override;
-    void freeEVP(EVP_PKEY * evp) override;
+    X509 * getX509(const void *buf, int num) ;
+    EVP_PKEY * getX509evp(X509 * x509) ;
+    //void freeX509(X509 * x509) ;
+    //void freeEVP(EVP_PKEY * evp) ;
     bool checkX509(unsigned long long groupID, unsigned long long avatarID,
-                            const char * strX509, int strX509len) override;
-    bool verify_it(const void* msg, size_t mlen, const void* sig, size_t slen, EVP_PKEY* evpX509) override;
+                            const char * strX509, int strX509len) ;
+    bool verify_it(const void* msg, size_t mlen, const void* sig, size_t slen, EVP_PKEY* evpX509) ;
 
 
 private:
@@ -52,8 +52,9 @@ private:
     SSL_CTX *ctx  {nullptr};
     BIO *errBIO   {nullptr};
 
-    ILog * iLog = nullptr;
-    IFileAdapter * iFileAdapter = nullptr;
+    ILog * iLog;
+    IFileAdapter * iFileAdapter;
+    IConfig * iConfig;
 
 
 

@@ -1,3 +1,11 @@
+/*
+ * This is the source code of SpecNet project
+ * It is licensed under MIT License.
+ *
+ * Copyright (c) Dmitriy Bondarenko
+ * feel free to contact me: specnet.messenger@gmail.com
+ */
+
 #ifndef SSLCLIENT_H
 #define SSLCLIENT_H
 
@@ -18,8 +26,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include "testssl.h"
-//#include "i/ialloc.h"
-#include "depend/tools/memory/calloc.h"
+#include "depend/tools/memory/specstack.h"
 
 
 #define SSL_CLI_ERROR  -1
@@ -38,11 +45,12 @@ public:
 
     /* single thread loop once: */
     int getJobResults() override;
-    bool sslConnect(IAlloc * iAlloc, const char * host, const char* port, int idleConnLife) override;
+    //bool sslConnect(IAlloc * iAlloc, const char * host, const char* port, int idleConnLife) override;
+    bool sslConnect(const char * host, const char* port, int idleConnLife) override;
     void stop() override;
-    bool putPackToSend(char * ptr) override;
-    char * readPack() override;
-    void eraseReadPack() override;
+    bool putPackToSend(IPack * ptr) override;
+    IPack * readPack() override;
+    //void eraseReadPack() override;
     time_t getLastActTime() override;
     bool setPKEY(const char * pkey, int len) override;
     bool sign_it(const void* msg, int msglen, void* sig, int* slen) override;
@@ -54,7 +62,7 @@ private:
 
     SSL_CTX *sslContext {nullptr};
     SSL *sslStaff {nullptr};
-    IAlloc * _iAlloc{nullptr};
+    //IAlloc * _iAlloc{nullptr};
 
     int _idleConnLife = 5;
 
@@ -64,16 +72,20 @@ private:
     time_t lastActTime = 0;
 
     /* READ expected packet */
-    bool readWait = true;
-    char * readPacket = nullptr;
+    int  readHeaderPending  =  0; // if need continue to read header
+    //bool readWait = true;
+    IPack * readPacket = nullptr;
     long readLenLeft = 0;
     char * readCur = nullptr;
+    SpecStack<IPack> readStack;
 
     /* WRITE packet */
-    char * writePacket = nullptr;
+    int  writeHeaderPending  =  0; // if need continue to write header
+    IPack * writePacket = nullptr;
     long writeLenLeft = 0;
     char * writeCur = nullptr;
-    std::queue<char *> writeQueue;
+    //std::queue<IPack *> writeQueue;
+    SpecStack<IPack> writeStack;
 
     EVP_PKEY * pkeyEVP = nullptr;
     X509 * x509 = nullptr;
@@ -83,7 +95,7 @@ private:
     int tcpConnect (const char* host, const char* port);
     int handleRead();
     int handleWrite();
-    void _putPackToSend(char * ptr) ;
+
     X509 * extractX509  (const void *x509, int len);
     bool verify_it(const void* msg, size_t mlen, const void* sig, size_t slen, EVP_PKEY* evpX509);
 };

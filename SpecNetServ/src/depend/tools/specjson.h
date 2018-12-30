@@ -6,7 +6,8 @@
 //must be greater 4:
 #define LEAF_SIZE 32
 
-typedef struct TNode {
+class TNode {
+public:
 	char type;
 	const char * pKey;
 	unsigned int lenKey;
@@ -15,7 +16,8 @@ typedef struct TNode {
 	TNode * nextNode;
 };
 
-typedef struct TLeaf {
+class TLeaf {
+public:
 	TNode nodes[LEAF_SIZE];
 };
 
@@ -238,7 +240,7 @@ private:
 		TNode * preNode = nullptr;
 		TNode * curNode = nullptr;
 		unsigned char searchLvl = 0; //key
-		bool allOk = true;
+        //bool allOk = true;
 		while (p < pEnd) {
 			if (whitespaces[static_cast<unsigned char>(*p)]) { 
 				++p;

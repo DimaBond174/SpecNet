@@ -3,7 +3,7 @@ set(CUR_TEST "testclient")
 set(CUR_SRC "")
 set(CUR_INCLUDES "")
 set(CUR_DEFINITIONS "")
-set(CUR_LINK_LIBS "")
+set(CUR_LINK_LIBS pthread)
 set(CUR_PROPERTIES "")
 
 file(GLOB_RECURSE CUR_SRC

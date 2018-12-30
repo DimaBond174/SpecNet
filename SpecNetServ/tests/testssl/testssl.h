@@ -3,7 +3,7 @@
 
 #include <string>
 #include "i/ilib.h"
-#include "i/ialloc.h"
+#include "i/ipack.h"
 
 class TestSSL: public ILib
 {
@@ -12,12 +12,14 @@ public:
     virtual ~TestSSL(){}
     std::string getTAG() {return std::string(TAG);}
 
-    virtual bool sslConnect(IAlloc * iAlloc, const char * host, const char * port, int idleConnLife) = 0;    
+    //virtual bool sslConnect(IAlloc * iAlloc, const char * host, const char * port, int idleConnLife) = 0;
+    virtual bool sslConnect(const char * host, const char * port, int idleConnLife) = 0;
     virtual void stop() = 0;
     virtual int getJobResults() = 0;
-    virtual bool putPackToSend(char * ptr) = 0;
-    virtual char * readPack() = 0;
-    virtual void eraseReadPack() = 0;
+    //virtual bool putPackToSend(char * ptr) = 0;
+    virtual bool putPackToSend(IPack * ptr) = 0;
+    virtual IPack * readPack() = 0;
+    //virtual void eraseReadPack() = 0;
     virtual time_t getLastActTime() = 0;
     virtual bool setPKEY(const char * pkey, int len) = 0;    
     virtual bool sign_it(const void* msg, int msglen, void* sig, int* slen) = 0;

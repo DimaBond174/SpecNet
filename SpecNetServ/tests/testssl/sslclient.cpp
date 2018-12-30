@@ -1,3 +1,11 @@
+/*
+ * This is the source code of SpecNet project
+ * It is licensed under MIT License.
+ *
+ * Copyright (c) Dmitriy Bondarenko
+ * feel free to contact me: specnet.messenger@gmail.com
+ */
+
 #include "sslclient.h"
 #include <iostream>
 #include "i/ipack.h"
@@ -134,11 +142,12 @@ int SSLClient::tcpConnect (const char* host, const char* port)
      return re;
 }
 
-bool SSLClient::sslConnect(IAlloc * iAlloc, const char * host, const char* port, int idleConnLife) {
+//bool SSLClient::sslConnect(IAlloc * iAlloc, const char * host, const char* port, int idleConnLife) {
+bool SSLClient::sslConnect(const char * host, const char* port, int idleConnLife) {
     bool re = false;
     _idleConnLife = idleConnLife;
     stop();
-    _iAlloc = iAlloc;
+    //_iAlloc = iAlloc;
     //faux loop
     do {
 
@@ -212,7 +221,7 @@ bool SSLClient::sslConnect(IAlloc * iAlloc, const char * host, const char* port,
 
         re = r==1;
         if (re) {
-             pfd.events = POLLIN | POLLOUT | POLLERR;
+             pfd.events = POLLIN | POLLOUT | POLLERR | POLLHUP;
         }
     } while(false);
 
@@ -244,19 +253,25 @@ void SSLClient::stop(){
         _connected = false;
     }
 
-    while (!writeQueue.empty()) {
-        char * ptr = writeQueue.front();
-        _iAlloc->specFree(ptr);
-        writeQueue.pop();
+    IPack *p;
+    while ((p=writeStack.pop())){
+        delete p;
     }
+//    while (!writeQueue.empty()) {
+//        char * ptr = writeQueue.front();
+//        _iAlloc->specFree(ptr);
+//        writeQueue.pop();
+//    }
 
     if (readPacket) {
-        _iAlloc->specFree(readPacket);
+        //_iAlloc->specFree(readPacket);
+        delete readPacket;
         readPacket = nullptr;
     }
 
     if (writePacket) {
-        _iAlloc->specFree(writePacket);
+        //_iAlloc->specFree(writePacket);
+        delete writePacket;
         writePacket = nullptr;
     }
 
@@ -294,11 +309,11 @@ void SSLClient::stop(){
 //    }
 //}
 
-int SSLClient::getJobResults(){
-    int re = SSL_CLI_NOTHING;
-    int r = poll(&pfd, 1, 100);
-    if (-1==r) {
-        std::cerr << "SSLClient::getJobResults() poll return :"
+int  SSLClient::getJobResults()  {
+  int  re  =  SSL_CLI_NOTHING;
+  int  r  =  poll(&pfd,  1,  100);
+  if  (-1==r)  {
+    std::cerr << "SSLClient::getJobResults() poll return :"
                   << r
                   << " pfd.revents  "
                   << pfd.revents
@@ -307,162 +322,174 @@ int SSLClient::getJobResults(){
                   << " msg  "
                   <<  strerror(errno)
                   << std::endl;
-        re = SSL_CLI_ERROR;
-    } else if (r>0) {
-        if (readWait && pfd.revents & POLLIN){
+        re  =  SSL_CLI_ERROR;
+    }  else if  (r>0)  {
+      if  (pfd.revents & (POLLERR | POLLHUP))  {
+        std::cerr << "Error: [SSLClient::getJobResults()] pfd.revents & (POLLERR | POLLHUP) == ERROR "
+             << std::endl;
+        re  =  SSL_CLI_ERROR;
+      }  else  {
+        if  (pfd.revents & POLLIN)  {
             //printf ("stdin is readable\n");
-            re = handleRead();
-        } else if(writePacket && (pfd.revents & POLLOUT)){
+            re  =  handleRead();
+        }
+        if  (SSL_CLI_ERROR!=re && writePacket  &&  (pfd.revents & POLLOUT))  {
            //printf ("stdout is writable\n");
-            re = handleWrite();
+            re  =  handleWrite();
         }
+      }
+    }
+    if  (SSL_CLI_NOTHING==re  &&  readStack.not_empty())  {
+      re  =  SSL_CLI_READED;
     }
     return re;
 }
 
-int SSLClient::handleRead() {
-    int re = SSL_CLI_NOTHING;
-    int res = 0;
-    //faux loop
-    do {
-        if (!readPacket) {
-            /* loading just header */
-            char buf[sizeof(T_IPack0_Network)];
-            res = SSL_read(sslStaff, buf, sizeof(T_IPack0_Network));
-            if (sizeof(T_IPack0_Network) ==res) {
-                readPacket = IPack0::eatPacket(_iAlloc , buf);
-                if (!readPacket) {
-                    std::cerr << "Error: [SSLClient::handleRead()] null==IPack0::eatPacket()"
-                           << std::endl;
-                    re = SSL_CLI_ERROR;
-                    break;
-                }
-
-                readCur = readPacket + sizeof(T_IPack0_Network);
-                readLenLeft = ((T_IPack0_Network *)(readPacket))->pack_len - sizeof(T_IPack0_Network);
-                lastActTime = std::time(nullptr);
-            } else {
-                re = SSL_CLI_ERROR;
-                if (res > 0) {
-                    std::cerr << "Error: [SSLClient::handleRead()] Only part of T_IPack0_Network header was loaded"
-                           << std::endl;
-                } else {
-                    int errE = SSL_get_error(sslStaff, res);
-                    if (SSL_ERROR_WANT_READ != errE ) {
-                         std::cerr << "Error: [SSLClient::handleRead()] SSL_read return error: "
-                               << errE << std::endl;
-                        re = SSL_CLI_ERROR;
-                    }
-                }
-                break;
-            }
+int  SSLClient::handleRead()  {
+  int  re  =  SSL_CLI_NOTHING;
+  int  res  =  0;
+    //EPOLLET loop
+  do  {
+    if  (!readPacket)  {
+      readPacket  =  new  IPack();
+      readHeaderPending  =  sizeof(T_IPack0_Network);
+      readCur  =  reinterpret_cast<char *>(&(readPacket->header));
+    } // if  (!s->readPacket
+    //  read header:
+    if  (readHeaderPending  >  0)  {
+      int  res  =  SSL_read(sslStaff,  readCur,  readHeaderPending);
+      if  (res<=0)  {
+        if  (!SSL_ERROR_WANT_READ == SSL_get_error(sslStaff, res))  {
+          std::cerr << "Error: [SSLClient::handleRead()] SSL_read ERROR "
+               << std::endl;
+            re  =  SSL_CLI_ERROR;
         }
-       re = SSL_CLI_READING;
-
-       /* load packet body */
-       while(0<(res = SSL_read(sslStaff,
-                                       readCur,
-                                       readLenLeft))) {
-
-            readLenLeft -= res;
-            readCur += res;
-            if (0==readLenLeft) {
-                /* all readed */
-                readWait = false;
-                //Check packet END:
-                T_IPack0_Network * pack0 = ((T_IPack0_Network *)(readPacket));
-                uint32_t * endMark = (uint32_t *)(readPacket + pack0->pack_len - sizeof(uint32_t));
-                if (N_SPEC_MARK_E!=*endMark) {
-                    std::cerr << "Error: [SSLClient::handleRead()] N_SPEC_MARK_E!=*endMark "
-                                << std::endl;
-                    re = SSL_CLI_ERROR;
-                    break;
-                }
-                re = SSL_CLI_READED;
-                break;
+        break;
+      }
+      readCur  +=  res;
+      readHeaderPending  -=  res;
+      if  (0==readHeaderPending)  {
+        T_IPack0_Network  *header  =  &(readPacket->header);
+        if  (IPack0::toHost(header))  {
+          readLenLeft  =  header->body_len;
+          if  (readLenLeft>0)  {
+            readPacket->body  =  reinterpret_cast<char *>(malloc(header->body_len));
+            if  (!readPacket->body)  {
+              std::cerr << "Error: [SSLClient::handleRead()] malloc ERROR "
+                   << std::endl;
+              re  =  SSL_CLI_ERROR;
+              break;
             }
-        }//while
-
-       if (res<=0) {
-           int errE = SSL_get_error(sslStaff, res);
-            if (SSL_ERROR_WANT_READ != errE ) {
-                std::cerr << "Error: [SSLClient::handleRead()] SSL_read return error: "
-                          << errE << std::endl;
-                re = SSL_CLI_ERROR;
-                break;
-            }
-       }
-
-    } while (false);
-
-    return re;
-}
-
-void SSLClient::_putPackToSend(char * ptr) {
-    writeLenLeft = _NTOHL(((T_IPack0_Network *)(ptr))->pack_len);
-    writeCur = writePacket = ptr;
-}
-
-int SSLClient::handleWrite(){
-    int re = SSL_CLI_NOTHING;
-    if (writePacket){
-        re = SSL_CLI_WRITING;
-        long res = SSL_write(sslStaff, writeCur, writeLenLeft);
-        if (res > 0) {
-            writeCur+=res;
-            writeLenLeft -=res;
-            if (0==writeLenLeft) {
-                _iAlloc->specFree(writePacket);
-                writePacket = nullptr;
-                if (!writeQueue.empty()) {
-                    char * ptr = writeQueue.front();
-                    _putPackToSend(ptr);
-                    writeQueue.pop();
-                }
-                re = SSL_CLI_WRITED;
-            }
-        } else {
-            int errE = SSL_get_error(sslStaff, res);
-             if (SSL_ERROR_WANT_WRITE != errE ) {
-                 std::cerr << "Error: [SSLClient::handleWrite()] SSL_write return error: "
-                           << errE << std::endl;
-                 re = SSL_CLI_ERROR;
-             }
+            readCur  =  readPacket->body;
+          }
+          lastActTime  =  std::time(nullptr);
+        }  else  {
+          std::cerr << "Error: [SSLClient::handleRead()] !IPack0::toHost() ERROR "
+               << std::endl;
+          re  =  SSL_CLI_ERROR;
+          break;
         }
+      }  else  {  break;  }
+    }  //  if  (s->readHeaderPending
+    //  load packet body:
+    while  (readLenLeft  >  0)  {
+      int  res  =  SSL_read(sslStaff,  readCur,  readLenLeft);
+      if  (res<=0)  {
+        if  (SSL_ERROR_WANT_READ  !=  SSL_get_error(sslStaff, res))  {
+          std::cerr << "Error: [SSLClient::handleRead()] SSL_read ERROR "
+               << std::endl;
+            re  =  SSL_CLI_ERROR;
+        }
+        return re;
+      }
+      readLenLeft  -=  res;
+      readCur  +=  res;
+    }//while
+
+    if  (0==readLenLeft)  {
+        /* all readed */
+        readStack.push(readPacket);
+        readPacket  =  nullptr;
+        break;
     }
-    return re;
+  } while (true);
+  return re;
+}  //  handleRead
+
+
+int  SSLClient::handleWrite()  {
+  int  re  = SSL_CLI_NOTHING;
+  //EPOLLET loop
+  do  {
+    if  (!writePacket)  {
+      writePacket  =  writeStack.pop();
+      if (!writePacket) {  break;  }
+      writeHeaderPending  =  sizeof(T_IPack0_Network);
+      writeCur  =  reinterpret_cast<char *>(&(writePacket->header));
+    } // if  (!s->readPacket
+    //  write header:
+    if  (writeHeaderPending  >  0)  {
+      int  res  =  SSL_write(sslStaff,  writeCur,  writeHeaderPending);
+      if  (res<=0)  {
+        if  (!SSL_ERROR_WANT_WRITE == SSL_get_error(sslStaff, res))  {
+          std::cerr << "Error: [SSLClient::handleWrite()] SSL_write ERROR "
+               << std::endl;
+          re  =  SSL_CLI_ERROR;
+        }
+        break;
+      }
+      writeCur  +=  res;
+      writeHeaderPending  -=  res;
+      if  (0==writeHeaderPending)  {
+        writeLenLeft = _NTOHL(writePacket->header.body_len);
+        if  (0  <  writeLenLeft)  {
+          writeCur  =  writePacket->body;
+        }
+      }  else  {  break;  }
+    }  //  if  (s->writeHeaderPending
+
+    //  write packet body:
+    while  (writeLenLeft  >  0)  {
+      int  res  =  SSL_write(sslStaff,  writeCur,  writeLenLeft);
+      if  (res<=0)  {
+        if  (SSL_ERROR_WANT_WRITE  !=  SSL_get_error(sslStaff, res))  {
+          std::cerr << "Error: [SSLClient::handleWrite()] SSL_write ERROR "
+               << std::endl;
+          re  =  SSL_CLI_ERROR;
+        }
+        return re;
+      }
+      writeLenLeft  -=  res;
+      writeCur  +=  res;
+    }//while
+
+    //  if all writed :
+    if (0==writeLenLeft)  {
+      delete  writePacket;
+      writePacket  =  nullptr;
+    }
+  }  while  (true);
+  return re;
+}  //  handleWrite
+
+bool  SSLClient::putPackToSend(IPack  *ptr)  {
+  writeStack.push(ptr);
+  return (SSL_CLI_ERROR != handleWrite());
 }
 
-bool SSLClient::putPackToSend(char * ptr){
-    bool re = false;    
-
-    if (!writePacket) {
-            _putPackToSend(ptr);
-            re = SSL_CLI_ERROR!= handleWrite();
-    } else {
-            writeQueue.push(ptr);
-            re = true;
-    }
-
-    return re;
+IPack * SSLClient::readPack()  {
+  //move semantic:
+  return readStack.pop();
 }
 
-char * SSLClient::readPack(){
-    char * re = nullptr;
-    if (!readWait){
-        /* packet ready */
-        re = readPacket;
-    }
-    return re;
-}
-
-void SSLClient::eraseReadPack() {
-    if (readPacket) {
-        _iAlloc->specFree(readPacket);
-        readPacket = nullptr;
-    }
-    readWait = true;
-}
+//void SSLClient::eraseReadPack() {
+//    if (readPacket) {
+//        //_iAlloc->specFree(readPacket);
+//        delete readPacket;
+//        readPacket = nullptr;
+//    }
+//    readWait = true;
+//}
 
 time_t SSLClient::getLastActTime(){ return lastActTime; }
 

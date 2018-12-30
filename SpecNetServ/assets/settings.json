@@ -8,7 +8,7 @@
 "LogFiles"     :"3",
 "ServerPort"   :"1741",
 "LogLevel"     :"5",
-"idleConnLife" :"50",
+"idleConnLife" :"5",
 "MaxConnections":"1000",
 "SSLcertificate_file":"./assets/ssl_cert.pem",
 "SSLPrivateKey_file" :"./assets/ssl_pkey.pem",
@@ -16,6 +16,6 @@
 "SpecGroupID0"  :"2000000000000000000",
 "SpecGroupID1"  :"1891716358585508223",
 "SpecGroupID2"  :"0",
-"Digital"  		:12345.67890,
+"Digital"       :12345.67890,
 "SpecGroupID3"  :"0"
 }

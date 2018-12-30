@@ -7,19 +7,16 @@ void SpecContext::start(std::shared_ptr <IConfig> && _iConfig,
                         std::shared_ptr <IFileAdapter> && _iFileAdapter,
                         std::shared_ptr <ILog> && _iLog,
                         std::shared_ptr <ISystem> && _iSystem,
-                        std::shared_ptr <Idb> && _iDB,
-                        std::shared_ptr <IEncrypt> && _iEncrypt,
-                        std::shared_ptr <IServer> && _iServer,
-                        std::shared_ptr <IAlloc> && _iAlloc
+                        std::shared_ptr <Idb> && _iDB,                        
+                        std::shared_ptr <IServer> && _iServer
                         ) {
     iConfig      = std::move(_iConfig);
     iFileAdapter = std::move(_iFileAdapter);
     iDB          = std::move(_iDB);
     iLog         = std::move(_iLog);
-    iSys         = std::move(_iSystem);
-    iEncrypt     = std::move(_iEncrypt);
-    iServer      = std::move(_iServer);
-    iAlloc      = std::move(_iAlloc);
+    iSys         = std::move(_iSystem);    
+    iServer      = std::move(_iServer);    
+
     bool isOk = false;
 
     //faux loop
@@ -50,6 +47,13 @@ void SpecContext::start(std::shared_ptr <IConfig> && _iConfig,
             iLog.get()->log("e","[%s]: FAIL iDB->start().",TAG);
             break;
         }
+
+//        specSSL   = std::make_shared<SpecSSL>(iLog.get(),
+//                                              iFileAdapter.get(), iConfig.get());
+//        if (!specSSL.get()->start()) {
+//            iLog.get()->log("e","[%s]: FAIL specSSL->start().",TAG);
+//            break;
+//        }
 
         keepRun.store(true, std::memory_order_release);
 
@@ -96,8 +100,8 @@ void SpecContext::onStopSig() {
         iDB.get()->stop();
     }
 
-    if (iEncrypt) {
-        iEncrypt.get()->stop();
+    if (specSSL) {
+        specSSL.get()->stop();
     }
 
     if (iLog) {

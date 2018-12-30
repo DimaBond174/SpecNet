@@ -40,7 +40,6 @@
     #include "depend/system/windows/windowsservice.h"
 #endif
 
-#include "depend/tools/memory/calloc.h"
 #include "spec/speccontext.h"
 
 int main(int argc, char** argv) {
@@ -79,16 +78,12 @@ int main(int argc, char** argv) {
     //inject database  adapter:
     #if defined(DSQLiteDB)
             std::make_shared<SQLiteDB>(),
-    #endif
-    #if defined(DSpecSSL)
-            std::make_shared<SpecSSL>(),
-    #endif
+    #endif    
     #if defined(DEpollServer)
-            std::make_shared<EpolSrv>(),
+            std::make_shared<EpolSrv>()
     #elif defined(DSelectServer)
-            std::make_shared<SelectSrv>(),
-    #endif
-            std::make_shared<CAlloc>()
+            std::make_shared<SelectSrv>()
+    #endif            
                     ); //).start(
     }; //[]()
 

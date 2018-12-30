@@ -1,3 +1,11 @@
+/*
+ * This is the source code of SpecNet project
+ * It is licensed under MIT License.
+ *
+ * Copyright (c) Dmitriy Bondarenko
+ * feel free to contact me: specnet.messenger@gmail.com
+ */
+
 #include "dbclient.h"
 #include <iostream>
 #include "spec/specstatic.h"
@@ -14,10 +22,10 @@ void  DBClient::stop() {
     db = nullptr;
 }
 
-bool  DBClient::start(IAlloc * iAlloc, const char * serverName, const char * pathBase, IFileAdapter * iFileAdapter, long long tmpGUID) {
+bool  DBClient::start(const char * serverName, const char * pathBase, IFileAdapter * iFileAdapter, int64_t tmpGUID) {
     bool re = false;
     _iFileAdapter = iFileAdapter;
-    _iAlloc = iAlloc;
+    //_iAlloc = iAlloc;
     //faux loop:
         do {
             int res = sqlite3_threadsafe();
@@ -57,7 +65,7 @@ static const char *  sqlGetServID2 =
         " where id_server=?";
 static const char *  sqlSetServID =
         "insert into t_servers (name, id_server) values (?, ?)";
-bool DBClient::setServID(const char * serverName, long long tmpGUID)  {
+bool DBClient::setServID(const char * serverName, int64_t tmpGUID)  {
     bool re = false;
     sqlite3_stmt *stmtGetServID1 = nullptr;
     sqlite3_stmt *stmtGetServID2 = nullptr;
@@ -240,8 +248,8 @@ bool DBClient::updateDB(int curVersion) {
 
 static const char *  sqlInsertMsg =
         "insert into t_messages (date_msg,id_msg,id_group,remote_id_avatar,my_id_avatar) values (?,?,?,?,?)";
-bool DBClient::storeMessage(uint64_t id_group, uint64_t remote_id_avatar, uint64_t my_id_avatar,
-                            uint64_t id_msg, uint64_t date_msg, const char * data, uint32_t len) {
+bool DBClient::storeMessage(int64_t id_group, int64_t remote_id_avatar, int64_t my_id_avatar,
+                            int64_t id_msg, int64_t date_msg, const char * data, uint32_t len) {
     /* let's store file */
     bool re = false;
     //faux loop:
@@ -275,46 +283,50 @@ bool DBClient::storeMessage(uint64_t id_group, uint64_t remote_id_avatar, uint64
 }//storeMessage
 
 
-static const char *  sqlGetNewMessages =
-        "select t1.date_msg, t1.id_msg from t_messages t1"\
-        " left outer join t_path t2"\
-        " on t1.date_msg=t2.date_msg and t1.id_msg=t2.id_msg and t1.id_group=?"\
-        " and t1.id_group=t2.id_group and t2.id_server=?"\
-        " where t2.id_avatar is null ";
-bool  DBClient::getNewMessages(uint64_t groupID,
-                               uint64_t * msgIDs, uint64_t * msgDates, uint32_t * resRows
-                               ) {
-    bool re = false;
-    //faux loop:
-        do {
-            if (!stmtGetNewMessages || SQLITE_OK !=sqlite3_reset(stmtGetNewMessages)) {
-                //const char *pzTest;
-                 if (SQLITE_OK != sqlite3_prepare_v3(db, sqlGetNewMessages, strlen(sqlGetNewMessages),
-                                                     SQLITE_PREPARE_PERSISTENT, &stmtGetNewMessages, NULL)) {
-                     break;
-                 }
-            }
 
-            sqlite3_bind_int64(stmtGetNewMessages, 1, groupID);
-            sqlite3_bind_int64(stmtGetNewMessages, 2, serverID);
+static constexpr ConstString  sqlGetNewMessages  {
+  "SELECT t1.date_msg, t1.id_msg FROM t_messages t1"\
+  " LEFT OUTER JOIN t_path t2"\
+  " ON t1.date_msg=t2.date_msg"\
+    " AND t1.id_msg=t2.id_msg"\
+    " AND t1.id_group=?1"\
+    " AND t1.id_group=t2.id_group"\
+    " AND t2.id_server=?2"\
+  " WHERE t2.id_server IS NULL"
+};
 
-            unsigned long i=0;
-            while (i<MAX_SelectRows && SQLITE_ROW==sqlite3_step(stmtGetNewMessages)) {
-                msgDates[i] = sqlite3_column_int64(stmtGetNewMessages, 0);
-                msgIDs[i] = sqlite3_column_int64(stmtGetNewMessages, 1);
-                ++i;
-            }
-            *resRows = i;
-            re = true;
-        } while (false);
-    return re;
+bool  DBClient::getNewMessages(int64_t groupID,
+    int64_t * msgIDs, int64_t * msgDates, uint32_t * resRows)  {
+  bool re = false;
+  //faux loop:
+  do {
+    if  (!stmtGetNewMessages
+         ||  SQLITE_OK  !=  sqlite3_reset(stmtGetNewMessages))  {
+      if (SQLITE_OK  !=  sqlite3_prepare_v3(db,  sqlGetNewMessages.c_str,  sqlGetNewMessages.size,
+                                            SQLITE_PREPARE_PERSISTENT, &stmtGetNewMessages, NULL)) {
+            break;
+      }
+    }
+
+    sqlite3_bind_int64(stmtGetNewMessages,  1,  groupID);
+    sqlite3_bind_int64(stmtGetNewMessages,  2,  serverID);
+    uint32_t  i  =  0;
+    while  (i<MAX_SelectRows  &&  SQLITE_ROW==sqlite3_step(stmtGetNewMessages))  {
+      msgDates[i]  =  sqlite3_column_int64(stmtGetNewMessages,  0);
+      msgIDs[i]  =  sqlite3_column_int64(stmtGetNewMessages,  1);
+      ++i;
+    }
+    *resRows  =  i;
+    re = true;
+  } while (false);
+  return re;
 }
 
 static const char *  sqlGetNeedMessages =
         "select id_msg from t_messages where date_msg=? and id_msg=? and id_group=?";
-bool DBClient::getNeedMessages(uint64_t groupID, uint64_t * msgIDsIN, uint64_t * msgDatesIN, uint32_t lenArrayIN,
-                               uint64_t * msgIDsNEED, uint64_t * msgDatesNEED, uint32_t * resRowsNEED,
-                               uint64_t * msgIDsNotNEED, uint64_t * msgDatesNotNEED, uint32_t * resRowsNotNEED) {
+bool DBClient::getNeedMessages(int64_t groupID, uint64_t * msgIDsIN, uint64_t * msgDatesIN, uint32_t lenArrayIN,
+                               int64_t * msgIDsNEED, int64_t * msgDatesNEED, uint32_t * resRowsNEED,
+                               int64_t * msgIDsNotNEED, int64_t * msgDatesNotNEED, uint32_t * resRowsNotNEED) {
     bool re = false;
     //faux loop:
         do {
@@ -354,7 +366,7 @@ bool DBClient::getNeedMessages(uint64_t groupID, uint64_t * msgIDsIN, uint64_t *
 
 static const char *  sqlInsertPath =
         "insert into t_path (date_msg,id_msg,id_group, id_server) values (?,?,?,?)";
-bool DBClient::storeNotNeed(uint64_t groupID, uint64_t msgIDs, uint64_t msgDate) {
+bool DBClient::storeNotNeed(int64_t groupID, int64_t msgIDs, int64_t msgDate) {
     bool re = false;
     //faux loop:
     do {
@@ -377,7 +389,7 @@ bool DBClient::storeNotNeed(uint64_t groupID, uint64_t msgIDs, uint64_t msgDate)
     return re;
 }
 
-bool DBClient::storeNotNeedArray(uint64_t groupID, uint64_t * msgIDsIN, uint64_t * msgDatesIN, uint32_t lenArrayIN) {
+bool DBClient::storeNotNeedArray(int64_t groupID, uint64_t * msgIDsIN, uint64_t * msgDatesIN, uint32_t lenArrayIN) {
     bool re = false;
     //faux loop:
     do {
@@ -404,8 +416,8 @@ bool DBClient::storeNotNeedArray(uint64_t groupID, uint64_t * msgIDsIN, uint64_t
 static const char *  sqlGetMsgType9 =
         "select remote_id_avatar, my_id_avatar"\
         " from t_messages where date_msg=? and id_msg=? and id_group=?";
-char * DBClient::getMsgType9(uint64_t id_group, uint64_t id_msg, uint64_t date_msg) {
-    char * re = nullptr;
+IPack * DBClient::getMsgType9(int64_t id_group, int64_t id_msg, int64_t date_msg) {
+    IPack * re = nullptr;
     //faux loop:
     do {
             if (!stmtGetMsgType9 || SQLITE_OK !=sqlite3_reset(stmtGetMsgType9)) {
@@ -433,12 +445,12 @@ char * DBClient::getMsgType9(uint64_t id_group, uint64_t id_msg, uint64_t date_m
             T_IPack9_struct outPacket9;
             outPacket9.str = msg.data();
             outPacket9.strLen = msg.size();
-            outPacket9.guids[0] = id_group;
-            outPacket9.guids[1] = id_msg;
-            outPacket9.guids[2] = date_msg;
-            outPacket9.guids[3] = sqlite3_column_int64(stmtGetMsgType9, 0);
-            outPacket9.guids[4] = sqlite3_column_int64(stmtGetMsgType9, 1);
-            re = IPack9::createPacket(_iAlloc, outPacket9, SPEC_PACK_TYPE_9);
+            outPacket9.guid1 = id_group;
+            outPacket9.guid2 = id_msg;
+            outPacket9.guid3 = date_msg;
+            outPacket9.guid4 = sqlite3_column_int64(stmtGetMsgType9, 0);
+            outPacket9.guid5 = sqlite3_column_int64(stmtGetMsgType9, 1);
+            re = IPack9::createPacket(outPacket9, SPEC_PACK_TYPE_9);
     } while (false);
     return re;
 }
@@ -446,7 +458,7 @@ char * DBClient::getMsgType9(uint64_t id_group, uint64_t id_msg, uint64_t date_m
 static const char *  sqlDelMsg =
         "delete from "\
         " t_messages where date_msg=? and id_msg=? and id_group=?";
-void DBClient::delMsg(uint64_t id_group, uint64_t id_msg, uint64_t date_msg) {
+void DBClient::delMsg(int64_t id_group, int64_t id_msg, int64_t date_msg) {
     //faux loop:
     do {
             if (!stmtDelMsg || SQLITE_OK !=sqlite3_reset(stmtDelMsg)) {

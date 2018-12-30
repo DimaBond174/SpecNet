@@ -4,54 +4,11 @@
 
 #define SPEC_LONG_MAX 2147483647
 
-SpecSSL::SpecSSL()
+SpecSSL::SpecSSL(ILog * iLog_, IFileAdapter * iFileAdapter_, IConfig * iConfig_)
+    : iLog(iLog_), iFileAdapter(iFileAdapter_), iConfig(iConfig_)
 {
 
 }
-
-//bool  SpecSSL::start() {
-//    SSL_load_error_strings();
-//    OpenSSL_add_ssl_algorithms();
-//    SpecContext & sr = SpecContext::instance();
-//    bool re = false;
-//    //faux loop
-//    do {
-//        logLevel = sr.iConfig.get()->getLongValue("LogLevel");
-
-//        const SSL_METHOD *method = SSLv23_server_method();
-//        ctx = SSL_CTX_new(method);
-//        if (!ctx) {
-//            sr.iLog.get()->log("e","[%s]: FAIL ctx = SSL_CTX_new(method).",TAG);
-//            break;
-//        }
-
-//        SSL_CTX_set_ecdh_auto(ctx, 1);
-
-//        const std::string &certPath =
-//                sr.iFileAdapter.get()->toFullPath(
-//                    sr.iConfig.get()->getStringValue(
-//                        "SSLcertificate_file").c_str());
-//        const std::string &keyPath =
-//                sr.iFileAdapter.get()->toFullPath(
-//                    sr.iConfig.get()->getStringValue(
-//                        "SSLPrivateKey_file").c_str());
-
-//        /* Set the key and cert */
-//        if (SSL_CTX_use_certificate_file(ctx, certPath.c_str(), SSL_FILETYPE_PEM) <= 0) {
-//            sr.iLog.get()->log("e","[%s]: FAIL SSL_CTX_use_certificate_file(ctx, certPath.",TAG);
-//            break;
-//        }
-
-//        if (SSL_CTX_use_PrivateKey_file(ctx, keyPath.c_str(), SSL_FILETYPE_PEM) <= 0 ) {
-//            sr.iLog.get()->log("e","[%s]: FAIL SSL_CTX_use_PrivateKey_file(ctx, keyPath.",TAG);
-//            break;
-//        }
-
-//        re = true;
-//        keepRun.store(true, std::memory_order_release);
-//    } while (false);
-//    return re;
-//}
 
 
 
@@ -62,10 +19,6 @@ bool  SpecSSL::start() {
     SSL_load_error_strings();
     ERR_load_BIO_strings();
     ERR_load_crypto_strings();
-
-    SpecContext & sr = SpecContext::instance();
-    iLog =sr.iLog.get();
-    iFileAdapter = sr.iFileAdapter.get();
 
     bool re = false;
     //faux loop
@@ -84,16 +37,16 @@ bool  SpecSSL::start() {
             break;
         }
 
-        logLevel = sr.iConfig.get()->getLongValue("LogLevel");
-        idleConnLife = sr.iConfig.get()->getLongValue("idleConnLife");
+        logLevel = iConfig->getLongValue("LogLevel");
+        idleConnLife = iConfig->getLongValue("idleConnLife");
 
         const std::string &certPath =
                 iFileAdapter->toFullPath(
-                    sr.iConfig.get()->getStringValue(
+                    iConfig->getStringValue(
                         "SSLcertificate_file").c_str());
         const std::string &keyPath =
                 iFileAdapter->toFullPath(
-                    sr.iConfig.get()->getStringValue(
+                    iConfig->getStringValue(
                         "SSLPrivateKey_file").c_str());
 
         /* Set the key and cert */
@@ -135,11 +88,10 @@ bool SpecSSL::loadSpecGroups() {
     char * jsonNameEnd = jsonName + SMAX_PATH -1;
     char * certPathSuffix = certPath;
     char * certPathEnd = certPath + SMAX_PATH -1;
-    SpecContext & sr = SpecContext::instance();
-//    IConfig * iConfig = sr.iConfig.get();
+
     //faux loop
     do{
-        const std::string &certPath1 = sr.iConfig.get()->getStringValue("GroupsCertsPath");
+        const std::string &certPath1 = iConfig->getStringValue("GroupsCertsPath");
         if (certPath1.empty()) {break;}
         const std::string &certPath2 =
                 iFileAdapter->toFullPath(certPath1.c_str());
@@ -151,7 +103,7 @@ bool SpecSSL::loadSpecGroups() {
         unsigned long long i =0;
         while(i < SMAX_GROUPS){
             printULong(i, jsonNameSuffix, jsonNameEnd);
-            const std::string & groupIDS = sr.iConfig.get()->getStringValue(jsonName);
+            const std::string & groupIDS = iConfig->getStringValue(jsonName);
             if (groupIDS.empty()) { break;  }
             groupID = stoll(groupIDS);
             if (0==groupID){ break;}
@@ -232,24 +184,23 @@ void   SpecSSL::logErrors() {
     int n = BIO_read(errBIO, buf, 1024);
     if (n>0) {
         buf[n] = 0;
-        SpecContext::instance().iLog.get()
-                ->log("e","[SpecSSL]:%s",buf);
+        iLog->log("e","[SpecSSL]:%s",buf);
     }
     BIO_reset(errBIO);
 }
 
 int SpecSSL::printSSLErrors(const char *str, size_t len, void *anyData)
 {
-    if (str && len > 0) {
-        SpecContext & sr = SpecContext::instance();
-        std::string str(str, len);
-        sr.iLog.get()->log("e","[SpecSSL]:%s",str.c_str());
+    if (str && len > 0) {        
+//        std::string str(str, len);
+//        iLog->log("e","[SpecSSL]:%s",str.c_str());
+        ((SpecSSL *)anyData)->iLog->log("e","[SpecSSL]:%s",str);
     }
     return 1;
 }
 
 
-void * SpecSSL::startEncryptSocket(int socket) {
+SSL * SpecSSL::startEncryptSocket(int socket) {
     //SSLstaff * re = nullptr ;
     SSL * re = nullptr ;
     //faux loop:
@@ -267,26 +218,26 @@ void * SpecSSL::startEncryptSocket(int socket) {
 }
 
 
-int SpecSSL::do_handshakeSocket(void * staff) {
-     return SSL_do_handshake((SSL *)staff);
-}
+//int SpecSSL::do_handshakeSocket(SSL * staff) {
+//     return SSL_do_handshake(staff);
+//}
 
-void SpecSSL::stopEncryptSocket(void * staff) {
-    SSL_free((SSL *)staff);
-    //delete ((SSLstaff *)staff);
-}
+//void SpecSSL::stopEncryptSocket(SSL * staff) {
+//    SSL_free(staff);
+//    //delete ((SSLstaff *)staff);
+//}
 
-int SpecSSL::getSocketState(void * staff, int code) {
-    return SSL_get_error((SSL *)staff, code);
-}
+//int SpecSSL::getSocketState(SSL * staff, int code) {
+//    return SSL_get_error(staff, code);
+//}
 
-int SpecSSL::readSocket(void * staff, void *buf, int num) {
-    return SSL_read((SSL *)staff, buf, num);
-}
+//int SpecSSL::readSocket(SSL * staff, void *buf, int num) {
+//    return SSL_read(staff, buf, num);
+//}
 
-int SpecSSL::writeSocket(void * staff, const void *buf, int num) {
-    return SSL_write((SSL *)staff, buf, num);
-}
+//int SpecSSL::writeSocket(SSL * staff, const void *buf, int num) {
+//    return SSL_write(staff, buf, num);
+//}
 
 bool SpecSSL::groupX509exists(unsigned long long groupID) {
     return specGroupIDs.end()!=specGroupIDs.find(groupID);
@@ -310,13 +261,13 @@ EVP_PKEY * SpecSSL::getX509evp(X509 * x509) {
     return X509_get_pubkey(x509);;
 }
 
-void SpecSSL::freeX509(X509 * x509) {
-    X509_free(x509);
-}
+//void SpecSSL::freeX509(X509 * x509) {
+//    X509_free(x509);
+//}
 
-void SpecSSL::freeEVP(EVP_PKEY * evp) {
-    EVP_PKEY_free(evp);
-}
+//void SpecSSL::freeEVP(EVP_PKEY * evp) {
+//    EVP_PKEY_free(evp);
+//}
 
 bool SpecSSL::checkX509(unsigned long long groupID, unsigned long long avatarID,
                         const char * strX509, int strX509len){

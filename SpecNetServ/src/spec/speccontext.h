@@ -7,11 +7,10 @@
 #include "i/idb.h"
 #include "i/ilog.h"
 #include "i/iconfig.h"
-#include "i/iencrypt.h"
 #include "i/ifileadapter.h"
 #include "i/isystem.h"
 #include "i/iserver.h"
-#include "i/ialloc.h"
+#include "depend/encrypt/boringssl/specssl.h"
 
 class SpecContext
 {    
@@ -25,10 +24,8 @@ public:
                std::shared_ptr <IFileAdapter> && _iFileAdapter,
                std::shared_ptr <ILog> && _iLog,
                std::shared_ptr <ISystem> && _iSystem,
-               std::shared_ptr <Idb> && _iDB,
-               std::shared_ptr <IEncrypt> && _iEncrypt,
-               std::shared_ptr <IServer> && _iServer,
-               std::shared_ptr <IAlloc> && _iAlloc
+               std::shared_ptr <Idb> && _iDB,               
+               std::shared_ptr <IServer> && _iServer
                 );
     //Stop all:
     void stop();
@@ -47,10 +44,9 @@ public:
     std::shared_ptr <ILog>          iLog        ;
     std::shared_ptr <IFileAdapter>  iFileAdapter;
     std::shared_ptr <IConfig>       iConfig     ;
-    std::shared_ptr <Idb>           iDB         ;
-    std::shared_ptr <IEncrypt>      iEncrypt    ;
-    std::shared_ptr <IServer>       iServer     ;
-    std::shared_ptr <IAlloc>       iAlloc     ;
+    std::shared_ptr <Idb>           iDB         ;    
+    std::shared_ptr <IServer>       iServer     ;    
+    std::shared_ptr <SpecSSL>       specSSL     ;
 
 private:
     const char * TAG = "SpecContext";

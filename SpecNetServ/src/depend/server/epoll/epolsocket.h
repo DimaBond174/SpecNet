@@ -1,107 +1,67 @@
 #ifndef EpolSocket_H
 #define EpolSocket_H
-#include <thread>
-#include <mutex>
-#include <condition_variable>
+
 #include <atomic>
-#include <queue>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include "iservcallback.h"
-#include "i/iencrypt.h"
-#include "i/ilog.h"
-#include "i/ialloc.h"
-#include "iepol.h"
-#include "i/iencrypt.h"
-#include "i/ifileadapter.h"
+#include <sys/epoll.h>
 #include <openssl/base.h>
-#include "i/idb.h"
+#include "depend/tools/memory/specstack.h"
+#include "i/ipack.h"
+#include "depend/encrypt/boringssl/specssl.h"
 
-#define ESOCK_FREE0  0
-#define ESOCK_FREE1  1
-#define ESOCK_GO_SHAKE   2
-#define ESOCK_START_THREAD   3
-#define ESOCK_WANT_WRITE 4
-#define ESOCK_STOPPING   6
+//class EpolSocket : public IStack {
+class EpolSocket  {
+ public:
+  EpolSocket  *nextIStack; //IStack interface (faster than vtable)
+  EpolSocket()  {
+    _epol_ev.data.ptr = this;
+  }
 
-//class EpolSocket :  public IEpoll
-//TODO SockHolder чтобы не шарить в таблице наследования
-class EpolSocket {
-public:
-    EpolSocket(IServCallback * iServCallback, int logLevel);
-   // EpolSocket(int logLevel);
-    ~EpolSocket();
+  std::atomic_bool   keepRun  {  true  };
+  SpecSafeStack<IPack>  readStack;
+  SpecSafeStack<IPack>  writeStack;
 
-//    struct sockaddr_in remote_addr;
-//    socklen_t remote_addr_len;
-
-    int _logLevel;
-    IServCallback * _iServCallback;
-    ILog * iLog;
-    IAlloc * iAlloc;
-    IEncrypt * iEncrypt;
-    IFileAdapter * iFileAdapter;
-    Idb * iDB;
-
-    /* state: 0=is free, 1=is free, 2=going to handshake
-     * 3=thread started
-     * 4=wants write
-     * 6=stopping
-    */
-    std::atomic<int> state  {0};
-
-    void start();
-    void stop();
-    void eatPacket(char * ptr);
-    char * getPacket();    
-    void writePack(char * ptr);
-    /* Common thread unsafe staff */
-    void freeResources();
-    static uint64_t getCurJavaTime(); //==System.currentTimeMillis()
-
-private:
-    //const char * TAG = "EpolSocket";
-
-    std::atomic<bool> keepRun  {true};
-
-    std::queue<char *> readQueue;
-    std::mutex readQueueMutex;
-
-    std::queue<char *> writeQueue;
-    std::mutex writeQueueMutex;
+//---------------------------------------------------------
+//EpolHolder Server's staff:  
+  struct  epoll_event  _epol_ev;
+  int  _socket_id   =  -1;
+  int  sockType   =  CLI_TYPE;
+  SSL  *sslStaff  =  nullptr;
+  int  connectState  =  0;  //0=not, 1=TCP, 2=SSL, 3=Authenticated
+  uint64_t  connectedGroup  =  0;
+  time_t  lastActTime  =  0;
+  bool  all_received  =  false;
+  int32_t msgs_to_receive  =  0;
+  bool  all_sended  =  false;
+  int32_t msgs_to_send  =  0;
 
 
-    std::thread workThread;
-    std::condition_variable workThreadCond;
-    std::mutex workThreadMutex;
+    /* READ expected packet */
+  int  readHeaderPending  =  0; // if need continue to read header
+  IPack  *readPacket  =  nullptr;
+  int  readLenLeft  =  0;
+  char  *readCur  =  nullptr;
 
-    static void* runWorkThreadLoop(void* arg);
-    void workThreadLoop();
+    /* WRITE packet */
+  SpecStack<IPack>  writeStackServer;
+  int  writeHeaderPending  =  0; // if need continue to write header
+  IPack  *writePacket  =  nullptr;
+  int  writeLenLeft  =  0;
+  char  *writeCur  =  nullptr;
+  //This call only server when enshure socket not in use:
+  void clearOnStart() ;
 
+//---------------------------------------------------------
+//EpolSocket Worker's staff:
+  SpecStack<IPack>  readStackWorker;
+  X509  *x509  =  nullptr;
+  EVP_PKEY  *evpX509  =  nullptr;
+  int64_t  groupID  =  0;
+  int64_t  avatarID  =  0;
+  int64_t  grpMailLife  =  0;
+  int64_t  avaMailLife  =  0;
 
+  bool  failSetCurX509(SpecSSL * specSSL,  const void *buf,  int num);
 
-
-    /* Read thread local thread staff */
-    X509 * _x509 = nullptr;
-    EVP_PKEY * _evpX509 = nullptr;
-    long long groupID = 0;
-    long long avatarID = 0;
-    long long grpMailLife = 0;
-    long long avaMailLife = 0;
-
-    bool setCurX509(const void *buf, int num);
-    void freeResourcesLocal();
-    bool parsePack(char * ptr);
-    bool doPack1(char * ptr);
-    bool doPack3(char * ptr);
-    bool doPack5(char * ptr);
-    bool doPack6(char * ptr);
-    bool doPack7(char * ptr);
-    bool doPack8(char * ptr);
-    bool doPack9(char * ptr);
-    bool doPack10(char * ptr);
 };
 
 #endif // EpolSocket_H
