@@ -22,6 +22,7 @@
 #include <ctime>
 #include <thread>
 #include <map>
+#include <vector>
 #include "i/ipack.h"
 #include "spec/specstatic.h"
 #include "testsql.h"
@@ -49,10 +50,17 @@ char * pathEnd;
 TestSSL * libSSL = nullptr;
 TestSQL * libSQL = nullptr;
 
-int64_t curGroupID = 0;
-int64_t curAvatarID = 0;
-bool all_received  =  true;
-bool all_sended  =  true;
+int64_t  authed_groupID  =  0;
+int64_t  authed_avatarID  =  0;
+int64_t  next_groupID  =  0;
+int64_t  next_avatarID  =  0;
+int64_t  prev_groupID  =  0;
+int64_t  prev_avatarID  =  0;
+bool all_received  =  false;
+bool all_sended  =  false;
+int32_t msgs_to_receive  =  0;
+int32_t msgs_to_send  =  0;
+
 
 int waitForJobResult(){
     time_t lastActTime = std::time(nullptr);
@@ -83,14 +91,14 @@ bool generateMessage(){
     cur = printString(" at ", cur, end);
     cur  = printULong(date, cur, end);
     cur = printString(": my message and some data: bla bla bla ", cur, end);
-    return libSQL->storeMessage(curGroupID, 0, curAvatarID, id_msg, date, data, cur-data);
+    return libSQL->storeMessage(authed_groupID, 0, authed_avatarID, id_msg, date, data, cur-data);
 
 }
 
 /* There is no client certificate on the server. It is necessary to send. */
 int doType2(IPack * answ) {
     int re = -1;    
-
+    std::cout  <<  "doType2:"  <<  '\n';
     //if (IPack1::parsePackI(res, answ)) {
         char * cur = printString("tests/assets/avtr/x509/", pathSuffix, pathEnd);
         //cur = printULong(res.groupID, cur, pathEnd);
@@ -125,6 +133,7 @@ int doType2(IPack * answ) {
 
 
 int doType4(IPack * answ) {
+  std::cout  <<  "doType4:"  <<  '\n';
     int re = -1;
    // T_IPack3_struct res;
 
@@ -178,16 +187,18 @@ int doType4(IPack * answ) {
 }
 
 bool sendMyType6(){
+  std::cout  <<  "sendMyType6:";
     bool re = false;
     /* All fine, need to send email list */
     int64_t msgIDs[MAX_SelectRows];
     int64_t msgDates[MAX_SelectRows];
     uint32_t resRows;
-    if (libSQL->getNewMessages(curGroupID, msgIDs, msgDates, &resRows)) {
+    if (libSQL->getNewMessages(authed_groupID, msgIDs, msgDates, &resRows)) {
+      std::cout  <<  "found new msgs to send:" << resRows  <<  '\n';
         /* Pack and send data */
         IPack * pack =  IPack6::createPacket(
                                        resRows,
-                                       curGroupID,
+                                       authed_groupID,
                                        msgIDs,
                                        msgDates,
                                        SPEC_PACK_TYPE_6);
@@ -199,15 +210,20 @@ bool sendMyType6(){
 }
 
 int doType6(IPack * answ) {
+  std::cout  <<  "doType6:";
     int re = -1;
     //T_IPack6_struct inPacket6;
     //faux loop
     do {
         //Check if groupID is same with groupID we work with:
         T_IPack0_Network * header = &(answ->header);
-        if (curGroupID!=header->key1) { break;}
+        if (next_groupID!=header->key1) { break;}
         T_IPack6_struct inPacket6;
         if (!IPack6::parsePackI(inPacket6, answ))  {break;}
+        prev_groupID  =  authed_groupID;
+        prev_avatarID  =  authed_avatarID;
+        authed_groupID  =  next_groupID;
+        authed_avatarID  =  next_avatarID;
         //if (curGroupID!=inPacket6.groupID) {break;}
         if (inPacket6.lenArray>0) {
             /* check if i need that mail */
@@ -218,9 +234,12 @@ int doType6(IPack * answ) {
             int64_t msgIDsNotNEED[MAX_SelectRows];
             int64_t msgDatesNotNEED[MAX_SelectRows];
             uint32_t resRowsNotNEED;
-            if (libSQL->getNeedMessages(curGroupID, inPacket6.guid1s, inPacket6.guid2s, inPacket6.lenArray,
+            if (libSQL->getNeedMessages(authed_groupID, inPacket6.guid1s, inPacket6.guid2s, inPacket6.lenArray,
                                     msgIDsNEED, msgDatesNEED, &resRowsNEED,
                                     msgIDsNotNEED, msgDatesNotNEED, &resRowsNotNEED)) {
+              msgs_to_receive  +=  resRowsNEED;
+              all_received  =  (msgs_to_receive <= 0);
+              std::cout  <<  "msgs_to_receive:"  << msgs_to_receive <<  '\n';
                 if (resRowsNEED > 0) {
                 /* Pack and send data */
 //                    char * pack =  IPack6::createPacket(&iAlloc,
@@ -233,7 +252,7 @@ int doType6(IPack * answ) {
 //                    if (!libSSL->putPackToSend(pack)) {break;}
                     IPack6::toIPack6(answ,
                                      resRowsNEED,
-                                     curGroupID,
+                                     authed_groupID,
                                      msgIDsNEED,
                                      msgDatesNEED,
                                      SPEC_PACK_TYPE_7
@@ -261,7 +280,7 @@ int doType6(IPack * answ) {
                     }
                     IPack6::toIPack6(answ,
                                      resRowsNotNEED,
-                                     curGroupID,
+                                     authed_groupID,
                                      msgIDsNotNEED,
                                      msgDatesNotNEED,
                                      SPEC_PACK_TYPE_8
@@ -273,6 +292,8 @@ int doType6(IPack * answ) {
                     answ = nullptr;
                 }
             }
+        }  else  {
+          all_received  =  true;
         }
 
         /* generate new mail */
@@ -292,49 +313,58 @@ int doType6(IPack * answ) {
 }
 
 int  doType7(IPack  *answ)  {
+  std::cout  <<  "doType7:";
   int  re  =  -1;
     //faux loop
   do  {
     T_IPack0_Network  *header  =  &(answ->header);
-    if  (curGroupID!=header->key1)  {  break;  }
+    if  (authed_groupID!=header->key1 && prev_groupID!=header->key1)  {  break;  }
     T_IPack6_struct  inPacket7;
     if  (!IPack6::parsePackI(inPacket7, answ))  {  break;  }
         //if (curGroupID!=inPacket7.groupID) {break;}
+    std::cout  <<  "toSend:" << inPacket7.lenArray <<'\n';
     if  (inPacket7.lenArray>0)  {
+      msgs_to_send += inPacket7.lenArray;
             /* send msg-s */
       for (uint32_t  i  =  0 ;  i<inPacket7.lenArray;  ++i)  {
-        IPack  *pack  =  libSQL->getMsgType9(curGroupID,
+        IPack  *pack  =  libSQL->getMsgType9(header->key1,
             inPacket7.guid1s[i],  inPacket7.guid2s[i]);
         if  (pack)  {
+          std::cout  <<  "Sending:" << header->key1
+                      <<','<<inPacket7.guid1s[i]
+                        <<','<<inPacket7.guid2s[i]<<'\n';
           if (!libSSL->putPackToSend(pack)) {  break;  }
           std::this_thread::yield();
         }
       }  //  for
-    }  else  {
-      all_sended = true;
-    }//if (inPacket7
+    }
+
+    //if (inPacket7
     re = 1;
   } while(false);
+  std::cout  <<  "\n";
   delete answ;
   return re;
 }
 
 int doType8(IPack * answ) {
+  std::cout  <<  "doType8:";
     int re = -1;
 
     //faux loop
     do {
         T_IPack0_Network * header = &(answ->header);
-        if (curGroupID!=header->key1) { break;}
+        if  (authed_groupID!=header->key1 && prev_groupID!=header->key1)  {  break;  }
         T_IPack6_struct inPacket8;
         if (!IPack6::parsePackI(inPacket8, answ)) {break;}
         //if (curGroupID!=inPacket8.groupID) {break;}
+        std::cout  <<  "inPacket8.lenArray:"  << inPacket8.lenArray;
         if (inPacket8.lenArray>0) {
             /* store unwanded */
-            if (!libSQL->storeNotNeedArray(curGroupID,
+            if (!libSQL->storeNotNeedArray(header->key1,
                                            inPacket8.guid1s, inPacket8.guid2s, inPacket8.lenArray)){ break;}
         }//if (inPacket8
-
+        std::cout  <<  ":OK\n";
         std::this_thread::yield();
 
         re = 1;
@@ -347,17 +377,22 @@ int doType8(IPack * answ) {
 //Need to save incoming mail:
 int doType9(IPack * answ) {
     int re = -1;
-
+    --msgs_to_receive;
+    all_received  =  (msgs_to_receive <= 0);    
     //faux loop
     do {
         T_IPack0_Network * header = &(answ->header);
-        if (curGroupID!=header->key1) { break;}
+        if  (authed_groupID!=header->key1 && prev_groupID!=header->key1)  {  break;  }
         T_IPack9_struct inPacket9;
         if (!IPack9::parsePackI(inPacket9, answ)) {break;}
         //if (curGroupID!=inPacket9.guids[0]) {break;}
+        std::cout  <<  "received "
+                << inPacket9.guid1 << " : "
+                   << inPacket9.guid2 << ","
+                      << inPacket9.guid3 << "\n";
         if (inPacket9.strLen>0) {
             /* store Msg */
-            if (libSQL->storeMessage(curGroupID, inPacket9.guid4, inPacket9.guid5,
+            if (libSQL->storeMessage(header->key1, inPacket9.guid4, inPacket9.guid5,
                                       inPacket9.guid2, inPacket9.guid3, inPacket9.str, inPacket9.strLen)) {
                 //Send confirmation
 
@@ -380,21 +415,25 @@ int doType9(IPack * answ) {
 
     } while(false);
     if (answ) { delete answ;}
+    std::cout  <<  "msgs_to_receive: " << msgs_to_receive << "\n";
     return re;
 }//doType9
 
 
 int doType10(IPack * answ) {
+    std::cout  <<  "doType10:";
     int re = -1;
-
+    --msgs_to_send;
+    all_sended  =  (msgs_to_send <= 0);
     //faux loop
     do {
         T_IPack0_Network * header = &(answ->header);
-        if (curGroupID!=header->key1) { break;}
+        if  (authed_groupID!=header->key1 && prev_groupID!=header->key1)  {  break;  }
         T_IPack9_struct inPacket9;
         if (!IPack9::parsePackI(inPacket9, answ)) {break;}
         //if (curGroupID!=inPacket9.guids[0]) {break;}
-        if (!libSQL->storeNotNeed(curGroupID, inPacket9.guid2, inPacket9.guid3)) {break;}
+        std::cout  <<  header->key1<<','<< inPacket9.guid2<<','<< inPacket9.guid3<<'\n';
+        if (!libSQL->storeNotNeed(header->key1, inPacket9.guid2, inPacket9.guid3)) {break;}
 
         std::this_thread::yield();
 
@@ -404,48 +443,49 @@ int doType10(IPack * answ) {
     return re;
 }//doType10
 
-int parsePack() {
-    int re = 0;
-    IPack * answ = libSSL->readPack();
-    //switch  (((T_IPack0_Network *)(answ))->pack_type)  {
-    //enshure answ deleted or reused:
+int  parsePack()  {
+  int  re  =  0;
+  IPack  *answ;
+  while  (re  >=  0
+      &&  (answ  =  libSSL->readPack()))  {
     switch  (answ->header.pack_type)  {
-    case 2:
+    case  2:
         //The server  requests unknown certificate X509
-        re =doType2(answ);
+        re  =  doType2(answ);
         break;
-    case 4:
+    case  4:
         //The server sends a test cryptographic task
-        re =doType4(answ);
+        re  =  doType4(answ);
         break;
-    case 6:
+    case  6:
         //The server sends OK == list of messages
         re  =  doType6(answ);
         if  (1==re)  {  re = 2;  }
         break;
-    case 7:
+    case  7:
         //The server and client answers with a list of the needed mail :
-        re =doType7(answ);
+        re  =  doType7(answ);
         break;
-    case 8:
+    case  8:
         //The server and client answers with a list of the unnecessary mail:
-        re =doType8(answ);
+        re  =  doType8(answ);
         break;
-    case 9:
+    case  9:
         //The server and client sends a requested mail:
-        re =doType9(answ);
+        re  =  doType9(answ);
         break;
-    case 10:
+    case  10:
         //The server and client sends a delivery confirmation:
-        re =doType10(answ);
+        re  =  doType10(answ);
         break;
     default:
-        std::cerr << "[parsePack] Error: type" << std::endl;
-        delete answ;
+        std::cerr  <<  "[parsePack] Error: type"  <<  std::endl;
+        delete  answ;
+        re  =  SSL_CLI_ERROR;
         break;
-    }    
-    //libSSL->eraseReadPack();
-    return re;
+    }
+  }  //  while
+  return  re;
 }
 
 
@@ -455,21 +495,38 @@ bool  doTest1()  {
   int  state  =  1;
   int  res  =  SSL_CLI_NOTHING;
   std::map<uint64_t,  uint64_t>  myMembership;
+  std::vector<uint64_t>  myMembershipToSend;
 #if 1==SPEC_CLI_N
-    myMembership.insert(std::make_pair(2000000000000000000, 1395809813882527485));
-    myMembership.insert(std::make_pair(1891716358585508223, 1848174035979184476));
+  //Lenovo
+    myMembership.insert(std::make_pair(2000000000000000000, 1145740341031570368));
+    myMembership.insert(std::make_pair(1200531589062418660, 1755766052803742575));
 #elif 2==SPEC_CLI_N
-    myMembership.insert(std::make_pair(2000000000000000000, 1395809813882527485));
-    myMembership.insert(std::make_pair(1891716358585508223, 1848174035979184476));
+  //Megafon Login2
+    myMembership.insert(std::make_pair(2000000000000000000, 1574203668488861772));
+    myMembership.insert(std::make_pair(1200531589062418660, 1201815450909601009));
 #else
-    myMembership.insert(std::make_pair(2000000000000000000, 1395809813882527485));
-    myMembership.insert(std::make_pair(1891716358585508223, 1848174035979184476));
+  //HTC HD2
+    myMembership.insert(std::make_pair(2000000000000000000, 1708305409019770006));
+    myMembership.insert(std::make_pair(1200531589062418660, 1189369955094930216));
 #endif
-  time_t  lastActTime  =  std::time(nullptr);
   for  (auto&&  it  :  myMembership)  {
-    curGroupID  =  it.first;
-    curAvatarID  =  it.second;
-    IPack  *pack  =  IPack1::createPacket(curGroupID,  curAvatarID,  SPEC_PACK_TYPE_1);
+    myMembershipToSend.push_back(it.first);
+  }
+  std::cout  <<  "send my Membership\n";
+  if  (!libSSL->putPackToSend(
+      IPack11::createPacket(
+          myMembershipToSend.size(),  myMembershipToSend.data(),
+          SPEC_PACK_TYPE_11)))  {
+    return false;
+  }
+  time_t  lastActTime  =  std::time(nullptr);
+  msgs_to_receive  =  0;
+  msgs_to_send  =  0;
+  for  (auto&&  it  :  myMembership)  {
+    next_groupID  =  it.first;
+    next_avatarID  =  it.second;
+    std::cout  <<  "start  send groupID:"  <<  next_groupID  <<  '\n';
+    IPack  *pack  =  IPack1::createPacket(next_groupID,  next_avatarID,  SPEC_PACK_TYPE_1);
     //  Send my membership:
     if  (!libSSL->putPackToSend(pack))  {  break;  }
       state  =  1;
@@ -478,16 +535,28 @@ bool  doTest1()  {
     bool authenticated = false;
     all_received  =  false;
     all_sended  =  false;
+
     while  (state>0
         &&  (std::time(nullptr) - lastActTime)<=IDLE_MAX_SEC)  {
+
       res  =  libSSL->getJobResults();
+
       if  (SSL_CLI_READED==res)  {
         state  =  parsePack();
+        std::cout  <<  "parsePack()="  <<  state  <<  '\n';
         if  (state<1)  {  break;  }
         if  (2==state) {  authenticated=true;  }
         lastActTime = std::time(nullptr);
       }  else if  (SSL_CLI_NOTHING==res)  {
-        if  (all_received && all_sended)  {  break;  }
+        if  (all_received && all_sended)  {
+          std::cout  <<  ":all_received && all_sended = true\n";
+          break;
+        }  else  {
+          std::cout  <<  "all_received="<<all_received
+            <<",msgs_to_receive="<<msgs_to_receive
+            <<",all_sended="<<all_sended
+            <<",msgs_to_send="<<msgs_to_send<<'\n';
+        }
 
 //              if (authenticated)  {
 //                /* generate new mail */

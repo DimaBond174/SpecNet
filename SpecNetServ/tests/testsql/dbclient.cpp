@@ -284,19 +284,20 @@ bool DBClient::storeMessage(int64_t id_group, int64_t remote_id_avatar, int64_t 
 
 
 
-static constexpr ConstString  sqlGetNewMessages  {
-  "SELECT t1.date_msg, t1.id_msg FROM t_messages t1"\
-  " LEFT OUTER JOIN t_path t2"\
-  " ON t1.date_msg=t2.date_msg"\
-    " AND t1.id_msg=t2.id_msg"\
-    " AND t1.id_group=?1"\
-    " AND t1.id_group=t2.id_group"\
-    " AND t2.id_server=?2"\
-  " WHERE t2.id_server IS NULL"
-};
+
 
 bool  DBClient::getNewMessages(int64_t groupID,
     int64_t * msgIDs, int64_t * msgDates, uint32_t * resRows)  {
+  static constexpr ConstString  sqlGetNewMessages  {
+    "SELECT t1.date_msg, t1.id_msg FROM t_messages t1"\
+    " LEFT OUTER JOIN t_path t2"\
+    " ON t1.date_msg=t2.date_msg"\
+      " AND t1.id_msg=t2.id_msg"\
+      " AND t1.id_group=t2.id_group"\
+      " AND t2.id_server=?1"\
+    " WHERE t1.id_group=?2"
+      " AND t2.id_server IS NULL"
+  };
   bool re = false;
   //faux loop:
   do {
@@ -308,8 +309,9 @@ bool  DBClient::getNewMessages(int64_t groupID,
       }
     }
 
-    sqlite3_bind_int64(stmtGetNewMessages,  1,  groupID);
-    sqlite3_bind_int64(stmtGetNewMessages,  2,  serverID);
+    sqlite3_bind_int64(stmtGetNewMessages,  1,  serverID);
+    sqlite3_bind_int64(stmtGetNewMessages,  2,  groupID);
+
     uint32_t  i  =  0;
     while  (i<MAX_SelectRows  &&  SQLITE_ROW==sqlite3_step(stmtGetNewMessages))  {
       msgDates[i]  =  sqlite3_column_int64(stmtGetNewMessages,  0);
@@ -322,47 +324,45 @@ bool  DBClient::getNewMessages(int64_t groupID,
   return re;
 }
 
-static const char *  sqlGetNeedMessages =
-        "select id_msg from t_messages where date_msg=? and id_msg=? and id_group=?";
-bool DBClient::getNeedMessages(int64_t groupID, uint64_t * msgIDsIN, uint64_t * msgDatesIN, uint32_t lenArrayIN,
-                               int64_t * msgIDsNEED, int64_t * msgDatesNEED, uint32_t * resRowsNEED,
-                               int64_t * msgIDsNotNEED, int64_t * msgDatesNotNEED, uint32_t * resRowsNotNEED) {
-    bool re = false;
-    //faux loop:
-        do {
-            if (!stmtGetNeedMessages ) {
-                //const char *pzTest;
-                 if (SQLITE_OK != sqlite3_prepare_v3(db, sqlGetNeedMessages, strlen(sqlGetNeedMessages),
-                                                     SQLITE_PREPARE_PERSISTENT, &stmtGetNeedMessages, NULL)) {
-                     break;
-                 }
-            }
+//static const char *  sqlGetNeedMessages =
+//        "select id_msg from t_messages where date_msg=? and id_msg=? and id_group=?";
+bool  DBClient::getNeedMessages(int64_t  groupID,
+    uint64_t  *msgIDsIN,  uint64_t  *msgDatesIN,  uint32_t  lenArrayIN,
+    int64_t  *msgIDsNEED,  int64_t  *msgDatesNEED,  uint32_t  *resRowsNEED,
+    int64_t  *msgIDsNotNEED,  int64_t  *msgDatesNotNEED,  uint32_t  *resRowsNotNEED)  {
+  static constexpr ConstString  sql  {
+    "SELECT id_msg FROM t_messages WHERE date_msg=?1 AND id_msg=?2 AND id_group=?3"
+  };
+  if  (!stmtGetNeedMessages )  {
+      //const char *pzTest;
+    if  (SQLITE_OK  !=  sqlite3_prepare_v3(db,  sql.c_str,  sql.size,
+        SQLITE_PREPARE_PERSISTENT,  &stmtGetNeedMessages,  NULL))  {
+      return  false;
+    }
+  }
+  uint32_t  needN  =  0;
+  uint32_t  notNeedN  =  0;
 
-            uint32_t needN = 0;
-            uint32_t notNeedN = 0;
-            sqlite3_bind_int64(stmtGetNeedMessages, 3, groupID);
-            for (uint32_t i = 0; i<lenArrayIN; ++i ){
-                if (SQLITE_OK !=sqlite3_reset(stmtGetNeedMessages)) { break;}
-                sqlite3_bind_int64(stmtGetNeedMessages, 1, msgDatesIN[i]);
-                sqlite3_bind_int64(stmtGetNeedMessages, 2, msgIDsIN[i]);
-                //if not exists:
-                if (SQLITE_ROW==sqlite3_step(stmtGetNeedMessages)) {
-                    msgDatesNotNEED[notNeedN] = msgIDsIN[i];
-                    msgDatesNotNEED[notNeedN] = msgDatesIN[i];
-                    ++notNeedN;
-                } else {
-                    msgIDsNEED[needN] = msgIDsIN[i];
-                    msgDatesNEED[needN] = msgDatesIN[i];
-                    ++needN;
-                }
-            }
-
-            *resRowsNEED = needN;
-            *resRowsNotNEED = notNeedN;
-            re = true;
-        } while (false);
-    return re;
-}
+  for  (uint32_t  i  =  0;  i<lenArrayIN;  ++i )  {
+    if  (SQLITE_OK  != sqlite3_reset(stmtGetNeedMessages))  {  break;  }
+    sqlite3_bind_int64(stmtGetNeedMessages,  1,  static_cast<int64_t>(msgDatesIN[i]));
+    sqlite3_bind_int64(stmtGetNeedMessages,  2,  static_cast<int64_t>(msgIDsIN[i]));
+    sqlite3_bind_int64(stmtGetNeedMessages,  3,  groupID);
+      //if not exists:
+    if  (SQLITE_ROW  ==  sqlite3_step(stmtGetNeedMessages))  {
+      msgIDsNotNEED[notNeedN]  =  msgIDsIN[i];
+      msgDatesNotNEED[notNeedN]  =  msgDatesIN[i];
+      ++notNeedN;
+    }  else  {
+      msgIDsNEED[needN]  =  msgIDsIN[i];
+      msgDatesNEED[needN]  =  msgDatesIN[i];
+      ++needN;
+    }
+  }  // for
+  *resRowsNEED  =  needN;
+  *resRowsNotNEED  =  notNeedN;
+  return  true;
+}  //  getNeedMessages
 
 static const char *  sqlInsertPath =
         "insert into t_path (date_msg,id_msg,id_group, id_server) values (?,?,?,?)";
@@ -455,22 +455,43 @@ IPack * DBClient::getMsgType9(int64_t id_group, int64_t id_msg, int64_t date_msg
     return re;
 }
 
-static const char *  sqlDelMsg =
-        "delete from "\
-        " t_messages where date_msg=? and id_msg=? and id_group=?";
-void DBClient::delMsg(int64_t id_group, int64_t id_msg, int64_t date_msg) {
+void  DBClient::delMsg(int64_t  id_group,  int64_t id_msg,  int64_t date_msg)  {
+  static constexpr ConstString  sqlDelMsg  {
+    "DELETE FROM t_messages"\
+    " WHERE date_msg=?1 AND id_msg=?2 AND id_group=?3"
+  };
+  static constexpr ConstString  sqlDelPath  {
+    "DELETE FROM t_path"\
+    " WHERE date_msg=?1 AND id_msg=?2 AND id_group=?3"
+  };
+
     //faux loop:
-    do {
-            if (!stmtDelMsg || SQLITE_OK !=sqlite3_reset(stmtDelMsg)) {
-                //const char *pzTest;
-                 if (SQLITE_OK != sqlite3_prepare_v3(db, sqlDelMsg, strlen(sqlDelMsg),
-                                                     SQLITE_PREPARE_PERSISTENT, &stmtDelMsg, NULL)) {
-                     break;
-                 }
-            }
-            sqlite3_bind_int64(stmtDelMsg, 1, date_msg);
-            sqlite3_bind_int64(stmtDelMsg, 2, id_msg);
-            sqlite3_bind_int64(stmtDelMsg, 3, id_group);
-            sqlite3_step(stmtDelMsg);
+    do  {
+      if (!stmtDelMsg || SQLITE_OK !=sqlite3_reset(stmtDelMsg)) {
+        if  (SQLITE_OK  !=  sqlite3_prepare_v3(db,  sqlDelMsg.c_str,  sqlDelMsg.size,
+            SQLITE_PREPARE_PERSISTENT,  &stmtDelMsg,  NULL))  {
+          break;
+        }
+      }
+      sqlite3_bind_int64(stmtDelMsg, 1, date_msg);
+      sqlite3_bind_int64(stmtDelMsg, 2, id_msg);
+      sqlite3_bind_int64(stmtDelMsg, 3, id_group);
+      sqlite3_step(stmtDelMsg);
+
+      if (!stmtDelPath || SQLITE_OK !=sqlite3_reset(stmtDelPath)) {
+        if  (SQLITE_OK  !=  sqlite3_prepare_v3(db,  sqlDelPath.c_str,  sqlDelPath.size,
+            SQLITE_PREPARE_PERSISTENT,  &stmtDelPath,  NULL))  {
+          break;
+        }
+      }
+      sqlite3_bind_int64(stmtDelPath, 1, date_msg);
+      sqlite3_bind_int64(stmtDelPath, 2, id_msg);
+      sqlite3_bind_int64(stmtDelPath, 3, id_group);
+      sqlite3_step(stmtDelPath);
+
     } while (false);
-}
+
+}//delMsg
+
+
+

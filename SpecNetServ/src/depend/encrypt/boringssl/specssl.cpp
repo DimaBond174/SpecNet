@@ -81,7 +81,7 @@ bool  SpecSSL::start() {
 
 bool SpecSSL::loadSpecGroups() {
     bool re = false;
-    specGroupIDs.clear();
+    //specGroupIDs.clear();
     char jsonName[SMAX_PATH];
     char certPath[SMAX_PATH];
     char * jsonNameSuffix = jsonName;
@@ -91,6 +91,7 @@ bool SpecSSL::loadSpecGroups() {
 
     //faux loop
     do{
+      //TODO просто грузить сертификаты какие найдёшь в этом каталоге
         const std::string &certPath1 = iConfig->getStringValue("GroupsCertsPath");
         if (certPath1.empty()) {break;}
         const std::string &certPath2 =
@@ -121,12 +122,12 @@ bool SpecSSL::loadSpecGroups() {
                 break;
             }
 
-            specGroupIDs.insert(groupID);
+            //specGroupIDs.insert(groupID);
             specGroupX509s.insert(std::make_pair(groupID, pX509));
 
             ++i;
         }
-        if (specGroupIDs.empty()) {
+        if (specGroupX509s.empty()) {
             iLog->log("e","[%s]: There is no group X509 certificate for work.",TAG);
         } else {
             re = true;
@@ -168,12 +169,12 @@ void  SpecSSL::stop()  {
     }
 
     if (!specGroupX509s.empty()) {
-        for (auto it : specGroupX509s) {
+        for (auto&& it : specGroupX509s) {
             X509_free(it.second);
         }
         specGroupX509s.clear();
     }
-    specGroupIDs.clear();
+    //specGroupIDs.clear();
 
     EVP_cleanup();
 }
@@ -239,8 +240,10 @@ SSL * SpecSSL::startEncryptSocket(int socket) {
 //    return SSL_write(staff, buf, num);
 //}
 
-bool SpecSSL::groupX509exists(unsigned long long groupID) {
-    return specGroupIDs.end()!=specGroupIDs.find(groupID);
+bool SpecSSL::groupX509exists(uint64_t  groupID) {
+  //return specGroupIDs.end()!=specGroupIDs.find(groupID);
+    return specGroupX509s.end()!=specGroupX509s.find(groupID);
+
 }
 
 
@@ -269,7 +272,7 @@ EVP_PKEY * SpecSSL::getX509evp(X509 * x509) {
 //    EVP_PKEY_free(evp);
 //}
 
-bool SpecSSL::checkX509(unsigned long long groupID, unsigned long long avatarID,
+bool SpecSSL::checkX509(uint64_t  groupID,  uint64_t  avatarID,
                         const char * strX509, int strX509len){
     bool re = false;
     BIO *bio = nullptr;
@@ -278,7 +281,8 @@ bool SpecSSL::checkX509(unsigned long long groupID, unsigned long long avatarID,
     X509_STORE_CTX *ctx = nullptr;
     //faux loop
     do {
-        std::map<unsigned long long, X509 *>::const_iterator it = specGroupX509s.find(groupID);
+        //std::map<unsigned long long, X509 *>::const_iterator it = specGroupX509s.find(groupID);
+      auto&& it = specGroupX509s.find(groupID);
         if (specGroupX509s.end()==it) { break; }
         X509 * CAcert = it->second;
         BIO *bio = BIO_new_mem_buf((void*)strX509, strX509len);
@@ -369,39 +373,6 @@ time_t SpecSSL::ASN1_TIME_to_DWORD(time_t curTime, ASN1_TIME * from)
     nSec += (str[i] - '0');
     //++i;
 
-    //time_t EndDate = mktime(&t);
-    //CString path;
-    //path.Format("The time is %s\n", _ctime64(&EndDate));
-    //return mktime(&t);// mktime(&t) ÷óäåñíûì îáðàçîì äîáàâëÿåò ËÈØÍÈÉ 1 ãîä è ñð¸ò â äðóãèå ÷àñòè äàòû
-    //time_t mktime (struct tm * timeptr);
-//    CTime * time = new CTime(nYear, nMonth, nDay, nHour, nMin, nSec);
-//    nYear
-//    1970–3000
-//    nMonth
-//    1–12
-//    nDay
-//    1–31
-//    nHour
-//    0-23
-//    nMin
-//    0-59
-//    nSec
-//    0-59
-//    if (time)
-//    {
-//        re = time->GetTime();
-//        delete time;
-//    }
-//    tm_sec	int	seconds after the minute	0-60*
-//                                                   tm_min	int	minutes after the hour	0-59
-//    tm_hour	int	hours since midnight	0-23
-//    tm_mday	int	day of the month	1-31
-//    tm_mon	int	months since January	0-11
-//    tm_year	int	years since 1900
-//    tm_wday	int	days since Sunday	0-6
-//    tm_yday	int	days since January 1	0-365
-   // CTime(nYear, nMonth, nDay, nHour, nMin, nSec);
-
     timeinfo = localtime (&curTime);
     //timeinfo->tm_year = nYear - 1900;
     timeinfo->tm_mon = nMonth - 1;
@@ -411,7 +382,7 @@ time_t SpecSSL::ASN1_TIME_to_DWORD(time_t curTime, ASN1_TIME * from)
     timeinfo->tm_sec = nSec;
 //https://stackoverflow.com/questions/14127013/mktime-returns-1-when-given-a-valid-struct-tm
   //говорят что работает тока в диапазоне ~ 13/12/1901 and 19/1/2038, поэтому:
-    if (nYear>=2038) { //Год когда все IT на планете рухнет
+    if (nYear>=2038) {
         nYear=2037;
     }
     timeinfo->tm_year = nYear - 1900;

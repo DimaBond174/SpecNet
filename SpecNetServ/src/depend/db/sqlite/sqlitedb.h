@@ -55,6 +55,7 @@ private:
     sqlite3_stmt *stmtAddPath = nullptr;
     sqlite3_stmt *stmtGetNeedMessages = nullptr;
     sqlite3_stmt *stmtDelMsg = nullptr;
+    sqlite3_stmt *stmtDelPath = nullptr;
     sqlite3_stmt *stmtGetMsgType9 = nullptr;
     sqlite3_stmt *stmtInsertMsg = nullptr;
 

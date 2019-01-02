@@ -208,13 +208,15 @@ int  SQLiteDB::callbackSQLite3(void  *NotUsed,  int  argc,  char **argv,
 bool  SQLiteDB::getNewMessages(int64_t  groupID,  int64_t  avatarID,
     int64_t  curTime,  int64_t  grpMailLife,  int64_t  avaMailLife,
     int64_t  *msgIDs,  int64_t  *msgDates,  uint32_t  *resRows)  {
+
   static constexpr  ConstString  sql  {
     "SELECT t1.date_msg, t1.id_msg FROM t_messages t1"\
     " LEFT OUTER JOIN t_path t2"\
-      " ON t1.date_msg=t2.date_msg AND t1.id_msg=t2.id_msg"\
-        " AND t1.id_group=?1"\
-        " AND t2.id_group=t1.id_group AND t2.id_avatar=?2"\
-    " WHERE t2.id_avatar IS NULL"\
+      " ON t1.date_msg=t2.date_msg AND t1.id_msg=t2.id_msg"\        
+        " AND t2.id_group=t1.id_group"\
+        " AND t2.id_avatar=?1"\
+    " WHERE t1.id_group=?2"\
+    " AND t2.id_avatar IS NULL"\
       " AND (t1.remote_id_avatar=0 AND t1.date_msg>?3"\
         " OR t1.remote_id_avatar=?4 AND t1.date_msg>?5"\
       ") AND t1.date_msg<?6"
@@ -231,8 +233,8 @@ bool  SQLiteDB::getNewMessages(int64_t  groupID,  int64_t  avatarID,
           break;
         }  //if sqlite3_prepare_v3
       }  //if !stmtGetNewMessages
-      sqlite3_bind_int64(stmtGetNewMessages,  1,  groupID);
-      sqlite3_bind_int64(stmtGetNewMessages,  2,  avatarID);
+      sqlite3_bind_int64(stmtGetNewMessages,  1,  avatarID);
+      sqlite3_bind_int64(stmtGetNewMessages,  2,  groupID);
       sqlite3_bind_int64(stmtGetNewMessages,  3,  grpMailLife);
       sqlite3_bind_int64(stmtGetNewMessages,  4,  avatarID);
       sqlite3_bind_int64(stmtGetNewMessages,  5,  avaMailLife);
@@ -336,32 +338,44 @@ bool  SQLiteDB::getNeedMessages(int64_t  groupID,
   return re;
 }//getNeedMessages
 
-static const char *  sqlDelMsg =
-        "delete from "\
-        " t_messages where date_msg=? and id_msg=? and id_group=?";
 
-void  SQLiteDB::delMsg(int64_t id_group, int64_t id_msg, int64_t date_msg){
-
-    if (db_mutex.try_lock_for(std::chrono::milliseconds(DEADLOCK_TIME))) {
+void  SQLiteDB::delMsg(int64_t  id_group,  int64_t  id_msg,  int64_t  date_msg)  {
+  static constexpr ConstString  sqlDelMsg  {
+    "DELETE FROM t_messages"\
+    " WHERE date_msg=?1 AND id_msg=?2 AND id_group=?3"
+  };
+  static constexpr ConstString  sqlDelPath  {
+    "DELETE FROM t_path"\
+    " WHERE date_msg=?1 AND id_msg=?2 AND id_group=?3"
+  };  
+  if  (db_mutex.try_lock_for(std::chrono::milliseconds(DEADLOCK_TIME)))  {
     //faux loop:
-        do {
-            if (!stmtDelMsg || SQLITE_OK !=sqlite3_reset(stmtDelMsg)) {
-                //const char *pzTest;
-                 if (SQLITE_OK != sqlite3_prepare_v3(db, sqlDelMsg, strlen(sqlDelMsg),
-                                                     SQLITE_PREPARE_PERSISTENT, &stmtDelMsg, NULL)) {
-                     break;
-                 }
-            }
-            sqlite3_bind_int64(stmtDelMsg, 1, date_msg);
-            sqlite3_bind_int64(stmtDelMsg, 2, id_msg);
-            sqlite3_bind_int64(stmtDelMsg, 3, id_group);
-            sqlite3_step(stmtDelMsg);
+    do  {
+      if (!stmtDelMsg || SQLITE_OK !=sqlite3_reset(stmtDelMsg)) {
+        if  (SQLITE_OK  !=  sqlite3_prepare_v3(db,  sqlDelMsg.c_str,  sqlDelMsg.size,
+            SQLITE_PREPARE_PERSISTENT,  &stmtDelMsg,  NULL))  {
+          break;
+        }
+      }
+      sqlite3_bind_int64(stmtDelMsg, 1, date_msg);
+      sqlite3_bind_int64(stmtDelMsg, 2, id_msg);
+      sqlite3_bind_int64(stmtDelMsg, 3, id_group);
+      sqlite3_step(stmtDelMsg);
 
+      if (!stmtDelPath || SQLITE_OK !=sqlite3_reset(stmtDelPath)) {
+        if  (SQLITE_OK  !=  sqlite3_prepare_v3(db,  sqlDelPath.c_str,  sqlDelPath.size,
+            SQLITE_PREPARE_PERSISTENT,  &stmtDelPath,  NULL))  {
+          break;
+        }
+      }
+      sqlite3_bind_int64(stmtDelPath, 1, date_msg);
+      sqlite3_bind_int64(stmtDelPath, 2, id_msg);
+      sqlite3_bind_int64(stmtDelPath, 3, id_group);
+      sqlite3_step(stmtDelPath);
 
-        } while (false);
-        db_mutex.unlock();
-    }//if
-
+    } while (false);
+    db_mutex.unlock();
+  }//if
 }//delMsg
 
 static const char *  sqlGetMsgType9 =

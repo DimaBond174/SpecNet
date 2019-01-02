@@ -333,7 +333,7 @@ int  SSLClient::getJobResults()  {
             //printf ("stdin is readable\n");
             re  =  handleRead();
         }
-        if  (SSL_CLI_ERROR!=re && writePacket  &&  (pfd.revents & POLLOUT))  {
+        if  (SSL_CLI_ERROR!=re  &&  (pfd.revents & POLLOUT))  {
            //printf ("stdout is writable\n");
             re  =  handleWrite();
         }
@@ -342,12 +342,14 @@ int  SSLClient::getJobResults()  {
     if  (SSL_CLI_NOTHING==re  &&  readStack.not_empty())  {
       re  =  SSL_CLI_READED;
     }
+    if  (SSL_CLI_NOTHING==re  &&  writeStack.not_empty())  {
+      re  =  SSL_CLI_WRITING;
+    }
     return re;
 }
 
 int  SSLClient::handleRead()  {
   int  re  =  SSL_CLI_NOTHING;
-  int  res  =  0;
     //EPOLLET loop
   do  {
     if  (!readPacket)  {
@@ -357,6 +359,7 @@ int  SSLClient::handleRead()  {
     } // if  (!s->readPacket
     //  read header:
     if  (readHeaderPending  >  0)  {
+      re  =  SSL_READING;
       int  res  =  SSL_read(sslStaff,  readCur,  readHeaderPending);
       if  (res<=0)  {
         if  (!SSL_ERROR_WANT_READ == SSL_get_error(sslStaff, res))  {
@@ -393,6 +396,7 @@ int  SSLClient::handleRead()  {
     }  //  if  (s->readHeaderPending
     //  load packet body:
     while  (readLenLeft  >  0)  {
+      re  =  SSL_READING;
       int  res  =  SSL_read(sslStaff,  readCur,  readLenLeft);
       if  (res<=0)  {
         if  (SSL_ERROR_WANT_READ  !=  SSL_get_error(sslStaff, res))  {
@@ -429,6 +433,7 @@ int  SSLClient::handleWrite()  {
     } // if  (!s->readPacket
     //  write header:
     if  (writeHeaderPending  >  0)  {
+      re  =  SSL_WRITING;
       int  res  =  SSL_write(sslStaff,  writeCur,  writeHeaderPending);
       if  (res<=0)  {
         if  (!SSL_ERROR_WANT_WRITE == SSL_get_error(sslStaff, res))  {
@@ -450,6 +455,7 @@ int  SSLClient::handleWrite()  {
 
     //  write packet body:
     while  (writeLenLeft  >  0)  {
+      re  =  SSL_WRITING;
       int  res  =  SSL_write(sslStaff,  writeCur,  writeLenLeft);
       if  (res<=0)  {
         if  (SSL_ERROR_WANT_WRITE  !=  SSL_get_error(sslStaff, res))  {

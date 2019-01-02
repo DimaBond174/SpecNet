@@ -52,6 +52,7 @@ private:
     sqlite3_stmt *stmtInsertPath = nullptr;
     sqlite3_stmt *stmtGetMsgType9 = nullptr;
     sqlite3_stmt *stmtDelMsg = nullptr;
+    sqlite3_stmt *stmtDelPath = nullptr;
 
     bool checkDBVersion();
     void dropDB() ;

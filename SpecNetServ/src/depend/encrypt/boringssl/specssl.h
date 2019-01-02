@@ -1,9 +1,11 @@
 #ifndef SPECSSL_H
 #define SPECSSL_H
 
-
-#include <atomic>
-#include <set>
+#if defined(Windows)
+#include <WinSock2.h>
+#else
+#include <arpa/inet.h>
+#endif
 #include <map>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -33,14 +35,14 @@ public:
     //int readSocket(SSL * staff, void *buf, int num) ;
     //int writeSocket(SSL * staff, const void *buf, int num) ;
     void logErrors() ;
-    bool groupX509exists(unsigned long long groupID) ;
+    bool groupX509exists(uint64_t  groupID) ;
 
 
     X509 * getX509(const void *buf, int num) ;
     EVP_PKEY * getX509evp(X509 * x509) ;
     //void freeX509(X509 * x509) ;
     //void freeEVP(EVP_PKEY * evp) ;
-    bool checkX509(unsigned long long groupID, unsigned long long avatarID,
+    bool checkX509(uint64_t  groupID,  uint64_t  avatarID,
                             const char * strX509, int strX509len) ;
     bool verify_it(const void* msg, size_t mlen, const void* sig, size_t slen, EVP_PKEY* evpX509) ;
 
@@ -61,8 +63,8 @@ private:
     //std::atomic<bool> keepRun {false};
     //std::atomic<long long> useCount {0};
 
-    std::set<unsigned long long> specGroupIDs;
-    std::map<unsigned long long, X509 *> specGroupX509s;
+    //std::set<unsigned long long> specGroupIDs;
+    std::map<uint64_t, X509 *> specGroupX509s;
 
     static int printSSLErrors(const char *str, size_t len, void *anyData);
     bool loadSpecGroups();

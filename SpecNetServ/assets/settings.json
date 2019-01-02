@@ -13,8 +13,9 @@
 "SSLcertificate_file":"./assets/ssl_cert.pem",
 "SSLPrivateKey_file" :"./assets/ssl_pkey.pem",
 "GroupsCertsPath" :"./assets/x509",
+"Cache size (msg count)" : 10000,
 "SpecGroupID0"  :"2000000000000000000",
-"SpecGroupID1"  :"1891716358585508223",
+"SpecGroupID1"  :"1200531589062418660",
 "SpecGroupID2"  :"0",
 "Digital"       :12345.67890,
 "SpecGroupID3"  :"0"

@@ -66,6 +66,7 @@ class  EpolSrv  :  public IServer,  public IServCallback  {
   bool tryAcceptConnLater  =  false; //if exists pending connections
   int64_t  maxConnections  = 10;
   int64_t  curConnections  =  0;
+  int64_t  hour_maxConnections  =  0;  //max curConnections per hour
   int  idleConnLife  =  5; //seconds
 
   EpolSocket ** curLeaf_NextPtr  =  nullptr;
@@ -94,6 +95,9 @@ class  EpolSrv  :  public IServer,  public IServCallback  {
   std::shared_ptr<Idb>  p_iDB;
   Idb  *iDB  =  nullptr;
 
+    /* chache */
+  OnCache  *cache  =  nullptr;
+
     /* init */
   bool  create_socket();
   static void * runServThreadLoop(void  *arg);
@@ -102,7 +106,7 @@ class  EpolSrv  :  public IServer,  public IServCallback  {
   void  newEpolSocketLeaf();
   void  clearSocket(EpolSocket  *p);
     /* work */
-  void  logConnection(sockaddr  *remote_addr,
+  void  logConnection(EpolSocket  *s,  sockaddr  *remote_addr,
     uint32_t  remote_addr_len,  int client_socket);
   EpolSocket * getFreeSocket();
   void  handleAccept();
@@ -119,6 +123,7 @@ class  EpolSrv  :  public IServer,  public IServCallback  {
   void  clearStoppedWorkers();
   void  setFreeSocketID(EpolSocket  *s);
   void  doPack7(EpolSocket  *s,  IPack  *pack);
+  void  doPack11(EpolSocket  *s,  IPack  *pack);
     /* stop */
   void  delEpolSocketLeaf(EpolSocket  **ptr);
   void  ohNoFreeRam();

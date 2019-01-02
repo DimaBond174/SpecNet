@@ -30,9 +30,10 @@ class EpolSocket  {
   uint64_t  connectedGroup  =  0;
   time_t  lastActTime  =  0;
   bool  all_received  =  false;
-  int32_t msgs_to_receive  =  0;
+  int32_t  msgs_to_receive  =  0;
   bool  all_sended  =  false;
-  int32_t msgs_to_send  =  0;
+  int32_t  msgs_to_send  =  0;
+  int32_t  groups_count  =  0;
 
 
     /* READ expected packet */
@@ -55,10 +56,10 @@ class EpolSocket  {
   SpecStack<IPack>  readStackWorker;
   X509  *x509  =  nullptr;
   EVP_PKEY  *evpX509  =  nullptr;
-  int64_t  groupID  =  0;
-  int64_t  avatarID  =  0;
-  int64_t  grpMailLife  =  0;
-  int64_t  avaMailLife  =  0;
+  int64_t  authed_groupID  =  0;
+  int64_t  authed_avatarID  =  0;
+  int64_t  next_groupID  =  0;
+  int64_t  next_avatarID  =  0;
 
   bool  failSetCurX509(SpecSSL * specSSL,  const void *buf,  int num);
 
