@@ -151,7 +151,7 @@ void CFileAdapter::delOldS(const std::string& dir, unsigned int keepCount) {
 
 }
 
-bool CFileAdapter::file_exists(const char * path) {
+bool CFileAdapter::file_existsS(const char * path) {
     struct stat fileStat;
     if ( stat(path, &fileStat) )
     {
@@ -225,5 +225,9 @@ uint64_t CFileAdapter::removeAll(const char * path) {
 
 uint64_t CFileAdapter::removeAllS(const char * path) {
     return 0;
+}
+
+bool CFileAdapter::file_exists(const char * path) {
+  return file_existsS(path);
 }
 

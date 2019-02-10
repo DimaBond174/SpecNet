@@ -1,6 +1,19 @@
+/*
+ * This is the source code of SpecNet project
+ * It is licensed under MIT License.
+ *
+ * Copyright (c) Dmitriy Bondarenko
+ * feel free to contact me: specnet.messenger@gmail.com
+ */
+
 #include <iostream>
 #include <memory>
 #include <functional>
+
+/*  Preparing for the injection of modules according
+ * to your preferences. The main work takes place
+ * in the server module without RTTI, therefore dependency
+ * injection does not affect the performance  */
 
 #if defined(DEpollServer)
     #include "depend/server/epoll/epolsrv.h"
@@ -39,53 +52,50 @@
     #include "depend/system/windows/windowssystem.h"
     #include "depend/system/windows/windowsservice.h"
 #endif
-
 #include "spec/speccontext.h"
 
-int main(int argc, char** argv) {
-
+int  main(int  argc,  char  **argv)  {
     /*
      * TODO Be sure to select the right preference
-     * in the CMakeLists.txt->options.cmake
+     * in the CMakeLists.txt
      * Everything is injected here:
      */
-    std::function<void()> f_startContext = []() {
-        SpecContext::instance().start(
+  std::function<void()>  f_startContext  =  []()  {
+    SpecContext::instance().start(
     //inject config loader:
-    #if defined(DConfigJson)
-            std::make_shared<ConfigJson>(),
-    #endif
+#if defined(DConfigJson)
+      std::make_shared<ConfigJson>(),
+#endif
     //inject file adapter:
-    #if defined(DFileAdapter)
-            std::make_shared<FileAdapter>(),
-    #else
-            std::make_shared<CFileAdapter>(),
-    #endif
+#if defined(DFileAdapter)
+      std::make_shared<FileAdapter>(),
+#else
+      std::make_shared<CFileAdapter>(),
+#endif
     //inject logger:
-    #if defined(DSpdLog)
-            std::make_shared<SpdLog>(),
-    #else
-            std::make_shared<SpecLog>(),
-    #endif
-
+#if defined(DSpdLog)
+      std::make_shared<SpdLog>(),
+#else
+      std::make_shared<SpecLog>(),
+#endif
     //inject os system api adapter:
-    #if defined(Linux)
-            std::make_shared<LinuxSystem>(),
-    #elif defined(Windows)
-            std::make_shared<WindowsSystem>(),
-    #endif
-
+#if defined(Linux)
+      std::make_shared<LinuxSystem>(),
+#elif defined(Windows)
+      std::make_shared<WindowsSystem>(),
+#endif
     //inject database  adapter:
-    #if defined(DSQLiteDB)
-            std::make_shared<SQLiteDB>(),
-    #endif    
-    #if defined(DEpollServer)
-            std::make_shared<EpolSrv>()
-    #elif defined(DSelectServer)
-            std::make_shared<SelectSrv>()
-    #endif            
-                    ); //).start(
-    }; //[]()
+#if defined(DSQLiteDB)
+      std::make_shared<SQLiteDB>(),
+#endif
+    //inject server:
+#if defined(DEpollServer)
+      std::make_shared<EpolSrv>()
+#elif defined(DSelectServer)
+      std::make_shared<SelectSrv>()
+#endif
+    ); //).start(
+  }; //[]()
 
 #if defined(Linux)
     LinuxService   srv (f_startContext);
@@ -93,7 +103,7 @@ int main(int argc, char** argv) {
     WindowsService srv (f_startContext);
 #endif
 
-    srv.onCmd(argc, argv);
-    SpecContext::instance().stop();
-    return 0;
-}
+  srv.onCmd(argc,  argv);
+  SpecContext::instance().stop();
+  return  0;
+}  //  main

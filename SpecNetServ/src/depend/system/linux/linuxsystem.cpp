@@ -1,5 +1,12 @@
-#include "linuxsystem.h"
+/*
+ * This is the source code of SpecNet project
+ * It is licensed under MIT License.
+ *
+ * Copyright (c) Dmitriy Bondarenko
+ * feel free to contact me: specnet.messenger@gmail.com
+ */
 
+#include "linuxsystem.h"
 #include <unistd.h>
 #include <limits.h>
 #include <linux/limits.h>
@@ -16,61 +23,61 @@
 
 #define BUFFER_SIZE 256
 
-LinuxSystem::LinuxSystem() {
+LinuxSystem::LinuxSystem()  {
 
 }
 
-std::string LinuxSystem::getExePath(){
-    return getExePathS();
+std::string  LinuxSystem::getExePath()  {
+  return  getExePathS();
 }
 
-std::shared_ptr<ILib> LinuxSystem::openSharedLib(const char * libPath){
-    return openSharedLibS(libPath);
+std::shared_ptr<ILib>  LinuxSystem::openSharedLib(const char  *libPath)  {
+  return  openSharedLibS(libPath);
 }
 
-std::shared_ptr<ILib> LinuxSystem::openSharedLibS(const char * libPath){
-    std::shared_ptr<ILib> re;
+std::shared_ptr<ILib>  LinuxSystem::openSharedLibS(const char  *libPath)  {
+  std::shared_ptr<ILib>  re;
     //faux loop
-    do {
-        void * lib_handle = dlopen(libPath, RTLD_LAZY);
-        if (!lib_handle) {
-            std::cerr << "FAIL dlopenl: " << dlerror() << std::endl;
-            break;
-        }
-        // Reset errors
-        dlerror();
-        std::shared_ptr<ILib> lib = std::make_shared<ILib>();
-        lib.get()->createInstance =
-                (TCreateFunc) dlsym(lib_handle, "createInstance");
-        const char * err = dlerror();
-        if(err) {
-            dlclose(lib_handle);
-            break;
-            //std::cerr << "Failed to load create symbol: " << err << std::endl;
-        }
-        lib.get()->deleteInstance =
-                (TDeleteFunc) dlsym(lib_handle, "deleteInstance");
-        err = dlerror();
-        if(err) {
-            dlclose(lib_handle);
-            break;
-//            std::cerr << "Failed to load destroy symbol: " << err << std::endl;
-        }
-        lib.get()->lib_handle = lib_handle;
-        re = lib;
-    } while (false);
-    return re;
-}
-
-void LinuxSystem::closeSharedLib(const std::shared_ptr<ILib> &iLib){
-    closeSharedLibS(iLib);
-}
-
-void LinuxSystem::closeSharedLibS(const std::shared_ptr<ILib> &iLib){
-    if (iLib) {
-        dlclose(iLib.get()->lib_handle);
-        iLib.get()->lib_handle = nullptr;
+  do  {
+    void  *lib_handle  =  dlopen(libPath,  RTLD_LAZY);
+    if  (!lib_handle)  {
+      std::cerr  <<  "FAIL dlopenl: "  <<  dlerror()  <<  std::endl;
+      break;
     }
+        // Reset errors
+    dlerror();
+    std::shared_ptr<ILib>  lib  =  std::make_shared<ILib>();
+    lib.get()->createInstance  =
+      (TCreateFunc) dlsym(lib_handle, "createInstance");
+    const char  *err  =  dlerror();
+    if  (err)  {
+      dlclose(lib_handle);
+      break;
+            //std::cerr << "Failed to load create symbol: " << err << std::endl;
+    }
+    lib.get()->deleteInstance  =
+      (TDeleteFunc) dlsym(lib_handle,  "deleteInstance");
+    err = dlerror();
+    if  (err)  {
+      dlclose(lib_handle);
+      break;
+//            std::cerr << "Failed to load destroy symbol: " << err << std::endl;
+    }
+    lib.get()->lib_handle  =  lib_handle;
+    re  =  lib;
+  }  while  (false);
+  return re;
+}  //  openSharedLibS
+
+void  LinuxSystem::closeSharedLib(const std::shared_ptr<ILib>  &iLib)  {
+  closeSharedLibS(iLib);
+}
+
+void  LinuxSystem::closeSharedLibS(const std::shared_ptr<ILib>  &iLib)  {
+  if  (iLib)  {
+    dlclose(iLib.get()->lib_handle);
+    iLib.get()->lib_handle  =  nullptr;
+  }
 }
 
 

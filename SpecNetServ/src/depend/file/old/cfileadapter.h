@@ -19,6 +19,7 @@ public:
     std::string getDir (const std::string& filePath) override;
     void delOld(const std::string& dir, unsigned int keepCount) override;
     uint64_t removeAll(const char * path) override;
+    bool file_exists(const char * path) override;
 
 /* static members */
     std::string loadFileS(const char * filePath);
@@ -26,10 +27,10 @@ public:
     static std::string getDirS (const std::string& filePath);
     static void delOldS(const std::string& dir, unsigned int keepCount);
     //static bool file_exists(const char * path);
+    static bool file_existsS(const char * path);
     static bool saveTFileS(const char * filePath, const char * data, unsigned long len);
 
-    static uint64_t removeAllS(const char * path);
-    static bool file_exists(const char * path) ;
+    static uint64_t removeAllS(const char * path);    
 
 private:
     std::string _exePath;

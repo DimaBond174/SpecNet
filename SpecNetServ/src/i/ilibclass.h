@@ -15,33 +15,32 @@
 
 /* Shared lib as SINGLE class instance */
 template <class T>
-class ILibClass {
-public:
-    ILibClass(const std::shared_ptr <ISystem> & iSystem,
-         const char * libPath) : _iSystem(iSystem){
-        _iLib = iSystem.get()->openSharedLib(libPath);
-        if (_iLib) {
-            i = (T *)_iLib.get()->createInstance();
-        }
+class  ILibClass  {
+ public:
+  /* instance of the class from shared lib: */
+  T  *i  =  nullptr;
+
+  ILibClass(const std::shared_ptr<ISystem>  &iSystem,
+      const char  *libPath)  :  _iSystem(iSystem)  {
+    _iLib  =  iSystem.get()->openSharedLib(libPath);
+    if  (_iLib)  {
+      i  =  reinterpret_cast<T *>(_iLib.get()->createInstance());
     }
+  }
 
-    virtual ~ILibClass(){
-        if (_iLib) {
-            if (i) {
-                _iLib.get()->deleteInstance(i);
-                i = nullptr;
-            }
-            _iSystem.get()->closeSharedLib(_iLib);
-        }
+  virtual  ~ILibClass()  {
+    if  (_iLib)  {
+      if  (i)  {
+        _iLib.get()->deleteInstance(i);
+        i  =  nullptr;
+      }
+      _iSystem.get()->closeSharedLib(_iLib);
     }
+  }
 
-    /* instance of the class from shared lib: */
-    T * i = nullptr;
-
-
-private:
-    std::shared_ptr <ILib>     _iLib;
-    std::shared_ptr <ISystem>  _iSystem;
+ private:
+  std::shared_ptr<ILib>  _iLib;
+  std::shared_ptr<ISystem>  _iSystem;
 };
 
 

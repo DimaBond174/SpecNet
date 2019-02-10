@@ -38,6 +38,7 @@ class  EpolSrv  :  public IServer,  public IServCallback  {
     /* IServCallback interfaces */
   const  char * getMessagesPath()  override;
   const  char * getAvaCertsPath()  override;
+  const  char * getAvaPicPath()  override;
   std::string  getServPassword()  override;
   EpolSocket * getStackSockNeedWorker()  override;
   void returnSocketToWork(EpolSocket  *sock)  override;
@@ -85,6 +86,7 @@ class  EpolSrv  :  public IServer,  public IServCallback  {
 
   std::string  messagesPath;
   std::string  avaCertsPath;
+  std::string  avaPicPath;
   std::string  servPassword;
   std::shared_ptr<ILog>  p_iLog;
   ILog  *iLog  =  nullptr;
@@ -122,6 +124,8 @@ class  EpolSrv  :  public IServer,  public IServCallback  {
   void  handleWrite(EpolSocket  *s);
   void  clearStoppedWorkers();
   void  setFreeSocketID(EpolSocket  *s);
+  void  closeConnection(EpolSocket * s);
+  void  doPack2(EpolSocket  *s,  IPack  *pack);
   void  doPack7(EpolSocket  *s,  IPack  *pack);
   void  doPack11(EpolSocket  *s,  IPack  *pack);
     /* stop */

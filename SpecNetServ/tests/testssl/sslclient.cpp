@@ -15,7 +15,9 @@
 #include <sys/epoll.h>
 #include <ctime>
 #include <openssl/rand.h>
+
 #define GUID_BASE 1000000000000000000LL
+#define SPEC_LONG_MAX 2147483647
 
 SSLClient::SSLClient()
 {
@@ -355,7 +357,7 @@ int  SSLClient::handleRead()  {
     if  (!readPacket)  {
       readPacket  =  new  IPack();
       readHeaderPending  =  sizeof(T_IPack0_Network);
-      readCur  =  reinterpret_cast<char *>(&(readPacket->header));
+      readCur  =  reinterpret_cast<char *>(&(readPacket->p_body.get()->header));
     } // if  (!s->readPacket
     //  read header:
     if  (readHeaderPending  >  0)  {
@@ -372,18 +374,19 @@ int  SSLClient::handleRead()  {
       readCur  +=  res;
       readHeaderPending  -=  res;
       if  (0==readHeaderPending)  {
-        T_IPack0_Network  *header  =  &(readPacket->header);
+        IPackBody * b  =  readPacket->p_body.get();
+        T_IPack0_Network  *header  =  &(b->header);
         if  (IPack0::toHost(header))  {
           readLenLeft  =  header->body_len;
           if  (readLenLeft>0)  {
-            readPacket->body  =  reinterpret_cast<char *>(malloc(header->body_len));
-            if  (!readPacket->body)  {
+            b->body  =  reinterpret_cast<char *>(malloc(header->body_len));
+            if  (!b->body)  {
               std::cerr << "Error: [SSLClient::handleRead()] malloc ERROR "
                    << std::endl;
               re  =  SSL_CLI_ERROR;
               break;
             }
-            readCur  =  readPacket->body;
+            readCur  =  b->body;
           }
           lastActTime  =  std::time(nullptr);
         }  else  {
@@ -429,7 +432,7 @@ int  SSLClient::handleWrite()  {
       writePacket  =  writeStack.pop();
       if (!writePacket) {  break;  }
       writeHeaderPending  =  sizeof(T_IPack0_Network);
-      writeCur  =  reinterpret_cast<char *>(&(writePacket->header));
+      writeCur  =  reinterpret_cast<char *>(&(writePacket->p_body.get()->header));
     } // if  (!s->readPacket
     //  write header:
     if  (writeHeaderPending  >  0)  {
@@ -446,9 +449,9 @@ int  SSLClient::handleWrite()  {
       writeCur  +=  res;
       writeHeaderPending  -=  res;
       if  (0==writeHeaderPending)  {
-        writeLenLeft = _NTOHL(writePacket->header.body_len);
+        writeLenLeft = _NTOHL(writePacket->p_body.get()->header.body_len);
         if  (0  <  writeLenLeft)  {
-          writeCur  =  writePacket->body;
+          writeCur  =  writePacket->p_body.get()->body;
         }
       }  else  {  break;  }
     }  //  if  (s->writeHeaderPending
@@ -721,4 +724,120 @@ bool SSLClient::setX509(const char * x509str, int len) {
 }
 
 
+time_t  SSLClient::ASN1_TIME_to_DWORD(time_t  curTime,
+    ASN1_TIME  *from)  {
+  const char  *str  =  reinterpret_cast<const char *>(from->data);
+  int  nYear,  nMonth,  nDay,  nHour,  nMin,  nSec;
+  size_t  i  =  0;
+  if  (V_ASN1_UTCTIME  ==  from->type)  {
+    //YYmmddHHMMSS
+        //t.tm_year
+    nYear  =  (str[i]  -  '0')  *  10;  ++i;
+        //t.tm_year
+    nYear  +=  (str[i] - '0');  ++i;
+        //if (t.tm_year < 70) t.tm_year += 100;
+    if  (nYear  <  70)  {
+      nYear  +=  2000;
+    }  else  {
+      nYear  +=  1900;
+    }
+  }  else if  (V_ASN1_GENERALIZEDTIME == from->type)  {
+        //t.tm_year
+    nYear  =  (str[i]  -  '0')  *  1000;  ++i;
+        //t.tm_year
+    nYear  +=  (str[i]  -  '0')  *  100;  ++i;
+        //t.tm_year
+    nYear  +=  (str[i]  -  '0')  *  10;  ++i;
+        //t.tm_year
+    nYear  +=  (str[i]  -  '0');  ++i;
+        //t.tm_year -= 1900;
+  }  else  {
+    return 0;
+  }
+    //t.tm_mon
+  nMonth  =  (str[i]  -  '0')  *  10;  ++i;
+    //t.tm_mon
+  nMonth  +=  (str[i]  -  '0');  ++i;
+    //t.tm_mday
+  nDay  =  (str[i]  -  '0')  *  10;  ++i;
+    //t.tm_mday
+  nDay  +=  (str[i]  -  '0');  ++i;
+    //t.tm_hour
+  nHour  =  (str[i]  -  '0')  *  10;  ++i;
+    //t.tm_hour
+  nHour  +=  (str[i]  -  '0');  ++i;
+    //t.tm_min
+  nMin  =  (str[i]  -  '0')  *  10;  ++i;
+    //t.tm_min
+  nMin  +=  (str[i] - '0');  ++i;
+    //t.tm_sec
+  nSec  =  (str[i]  -  '0')  *  10;  ++i;
+    //t.tm_sec
+  nSec  +=  (str[i]  -  '0');
+    //++i;
+  struct  tm  timeinfo;
+  localtime_r(&curTime, &timeinfo);
+    //timeinfo->tm_year = nYear - 1900;
+  timeinfo.tm_mon  =  nMonth - 1;
+  timeinfo.tm_mday  =  nDay;
+  timeinfo.tm_hour  =  nHour;
+  timeinfo.tm_min  =  nMin;
+  timeinfo.tm_sec  =  nSec;
+//https://stackoverflow.com/questions/14127013/mktime-returns-1-when-given-a-valid-struct-tm
+  //говорят что работает тока в диапазоне ~ 13/12/1901 and 19/1/2038, поэтому:
+  if  (nYear >= 2038)  {
+        nYear=2037;
+  }
+  timeinfo.tm_year  =  nYear - 1900;
+  return mktime(&timeinfo);
+}  //  ASN1_TIME_to_DWORD
 
+
+bool  SSLClient::checkX509(uint64_t  groupID,  uint64_t  avatarID,
+    const char  *strX509,  int  strX509len)  {
+  bool  re  =  false;
+  BIO  *bio  =  nullptr;
+  X509  *UScert  =  nullptr;
+  X509_STORE  *sto  =  nullptr;
+  X509_STORE_CTX  *ctx  =  nullptr;
+    //faux loop
+  do  {
+    auto&&  it  =  specGroupX509s.find(groupID);
+    if (specGroupX509s.end()==it) {  break;  }
+    X509  *CAcert  =  it->second;
+    BIO  *bio  =  BIO_new_mem_buf(reinterpret_cast<const void *>(strX509),  strX509len);
+    if  (!bio)  {  break;  }
+    PEM_read_bio_X509(bio,  &UScert,  NULL,  NULL);
+    if  (!UScert)  {  break;  }
+    long  hash  =  avatarID  %  SPEC_LONG_MAX;
+    long  serial  =  ASN1_INTEGER_get(X509_get_serialNumber(UScert));
+    if  (serial  !=  hash)  {  break;  }
+    time_t  t  =  time(NULL);
+    if  ((ASN1_TIME_to_DWORD(t,  X509_get_notAfter(UScert))  -  t)
+        <  0)  {
+      break;
+    }
+    sto  =  X509_STORE_new();
+    if  (!sto)  {  break;  }
+    X509_STORE_add_cert(sto,  CAcert);
+    ctx  =  X509_STORE_CTX_new();
+    if  (!ctx)  {  break;  }
+    X509_STORE_CTX_init(ctx,  sto,  UScert,  NULL);
+    re  =  (1  ==  X509_verify_cert(ctx));
+  }  while  (false);
+  if  (ctx)  {  X509_STORE_CTX_free(ctx);  }
+  if  (sto)  {  X509_STORE_free(sto);  }
+  if  (UScert)  {  X509_free(UScert);  }
+  if  (bio)  {  BIO_free(bio);  }
+  return re;
+}  //  checkX509
+
+
+bool  SSLClient::set_group_X509(uint64_t  groupID,  const char  *x509str,  int  len)  {
+  X509  *pX509  =  extractX509(x509str,  len);
+  if  (pX509)  {
+    specGroupX509s.insert(std::make_pair(groupID,  pX509));
+    return  true;
+  }
+  return  false;
+}

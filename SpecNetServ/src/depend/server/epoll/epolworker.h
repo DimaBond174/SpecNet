@@ -48,6 +48,7 @@ class EpolWorker  {
   void  freeResources();
   bool  eatPack(EpolSocket  *sock,  IPack  *pack);
   bool  doPack1(EpolSocket  *sock,  IPack  *pack);
+  bool  doPack2(EpolSocket  *sock,  IPack  *pack);
   bool  doPack3(EpolSocket  *sock,  IPack  *pack);
   bool  doPack5(EpolSocket  *sock,  IPack  *pack);
   bool  doPack6(EpolSocket  *sock,  IPack  *pack);
@@ -55,6 +56,8 @@ class EpolWorker  {
   bool  doPack8(EpolSocket  *sock,  IPack  *pack);
   bool  doPack9(EpolSocket  *sock,  IPack  *pack);
   bool  doPack10(EpolSocket  *sock,  IPack  *pack);
+  bool  doPack12(EpolSocket  *sock,  IPack  *pack);
+  bool  doPack13(EpolSocket  *sock,  IPack  *pack);
   int64_t  getCurJavaTime();
 };
 

@@ -24,6 +24,7 @@
 #include <sys/epoll.h>
 #include <poll.h>
 #include <signal.h>
+#include "depend/tools/spectools.h"
 
 static constexpr uint32_t EPOL_client_events  =
     EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLHUP | EPOLLET;
@@ -91,6 +92,9 @@ bool EpolSrv::create_socket() {
         SpecContext & sr = SpecContext::instance();
         logLevel = sr.iConfig.get()->getLongValue("LogLevel");
         maxConnections = sr.iConfig.get()->getLongValue("MaxConnections");
+        if  (maxConnections  <= 0)  {  maxConnections  =  10;  }
+        maxWorkers = sr.iConfig.get()->getLongValue("Max worker threads");
+        if  (maxWorkers  <= 0)  {  maxWorkers  =  1;  }
         uint32_t  capacity = sr.iConfig.get()->getLongValue("Cache size (msg count)");
         if  (0==capacity  ||  capacity>10000000)  {  capacity  =  10000;  }
         cache = new OnCache(capacity);
@@ -122,6 +126,14 @@ bool EpolSrv::create_socket() {
                         "AvaCertsPath").c_str());
         if ('/'!=avaCertsPath[avaCertsPath.length()-1]) {
             avaCertsPath.push_back('/');
+        }
+
+        avaPicPath  =
+            iFileAdapter->toFullPath(
+                sr.iConfig.get()->getStringValue(
+                    "AvaPicPath").c_str());
+        if ('/'!=avaPicPath[avaPicPath.length()-1]) {
+           avaPicPath.push_back('/');
         }
 
 
@@ -250,12 +262,12 @@ void EpolSrv::ohNoFreeRam() {
 }
 
 void  EpolSrv::handleWrite(EpolSocket * s)  {
-#ifdef Debug
-  if  (logLevel>4)  {
-    iLog->log("i","[EpolSrv::handleWrite]: EpolSocket(%llu):%i",
-              s, s->_socket_id);
-  }
-#endif
+//#ifdef Debug
+//  if  (logLevel>4)  {
+//    iLog->log("i","[EpolSrv::handleWrite]: EpolSocket(%llu):%i",
+//              s, s->_socket_id);
+//  }
+//#endif
     //EPOLLET loop
   do  {
     if  (!s->writePacket)  {
@@ -265,7 +277,17 @@ void  EpolSrv::handleWrite(EpolSocket * s)  {
         s->writePacket  =  s->writeStackServer.pop();
         if (!s->writePacket) {  break;  }
       }
-      T_IPack0_Network  *header  =  &(s->writePacket->header);
+#ifdef Debug
+  if  (logLevel>4)  {
+//    std::string str ("[EpolSrv::handleWrite] start write pack[");
+//    str.append(to_string(writePacket)).append("] type ")
+//       .append(to_string(_NTOHL(writePacket->p_body.get()->header.pack_type)));
+//    LOGW("%s",str.c_str());
+    iLog->log("i","[EpolSrv::handleWrite]:start write pack[%llu] type %u to sock[%llu]"
+              ,s->writePacket, _NTOHL(s->writePacket->p_body.get()->header.pack_type), s);
+  }
+#endif
+      T_IPack0_Network  *header  =  &(s->writePacket->p_body.get()->header);
       if  (N_SPEC_PACK_TYPE_6==header->pack_type)  {
           // The server checked the certificate and allowed the work:
           s->connectState = 3;
@@ -275,26 +297,53 @@ void  EpolSrv::handleWrite(EpolSocket * s)  {
           // Mail waiting:
         int32_t  lenArray  =  _NTOHL(header->body_len) / SIZE_2x_uint64_t;
         s->msgs_to_receive  +=  lenArray;
-        s->all_received  =  (s->msgs_to_receive  <=  0);
+
       }  else if  (N_SPEC_PACK_TYPE_9==header->pack_type)  {
           // Cache mail:        
-        if  (s->writePacket->delete_after_send)  {
-          cache->insertNode(header,  s->writePacket);
+        if  (s->writePacket->p_body.get()->not_cached)  {
+          cache->insertNode(s->writePacket);
         }
         --s->msgs_to_send;
-        s->all_sended  =  (s->msgs_to_send  <=  0);
+
       }  else if  (N_SPEC_PACK_TYPE_10==header->pack_type)  {
         --s->msgs_to_receive;
-        s->all_received  =  (s->msgs_to_receive  <=  0);
+
+      }  else if  (N_SPEC_PACK_TYPE_3==header->pack_type)  {
+        if  (s->writePacket->p_body.get()->not_cached)  {
+          cache->insertNode(s->writePacket);
+        }
+        --s->msgs_to_send;
+
       }
       s->writeHeaderPending  =  sizeof(T_IPack0_Network);
       s->writeCur  =  reinterpret_cast<char *>(header);
+//#ifdef Debug
+//  if  (logLevel>4)  {
+//    iLog->log("i","[EpolSrv::handleWrite]: EpolSocket(%llu):socket(%i):pack_type:%llu",
+//              s, s->_socket_id,_NTOHL(header->pack_type));
+//  }
+//#endif
     } // if  (!s->readPacket
+
     //  write header:
     if  (s->writeHeaderPending  >  0)  {
+//#ifdef Debug
+//  if  (logLevel>4)  {
+//    iLog->log("i","[EpolSrv::handleWrite]:s->writeHeaderPending=%i", s->writeHeaderPending);
+//  }
+//#endif
       int  res  =  SSL_write(s->sslStaff,  s->writeCur,  s->writeHeaderPending);
-      if  (res<=0)  {
-        if  (!SSL_ERROR_WANT_WRITE == SSL_get_error(s->sslStaff, res))  {
+      if  (res  <=  0)  {
+//        if  (SSL_ERROR_WANT_WRITE != SSL_get_error(s->sslStaff, res))  {
+//            setFreeSocketID(s);
+//        }
+        int er = SSL_get_error(s->sslStaff, res);
+        if  (SSL_ERROR_WANT_WRITE != er)  {
+#ifdef Debug
+  if  (logLevel > 4)  {
+    iLog->log("i","[EpolSrv::handleWrite]:SSL_get_error(%i)=%i", res, er);
+  }
+#endif
             setFreeSocketID(s);
         }
         break;
@@ -302,20 +351,35 @@ void  EpolSrv::handleWrite(EpolSocket * s)  {
       s->writeCur  +=  res;
       s->writeHeaderPending  -=  res;
       if  (0==s->writeHeaderPending)  {
-        s->writeLenLeft = _NTOHL(s->writePacket->header.body_len);
+        s->writeLenLeft = _NTOHL(s->writePacket->p_body.get()->header.body_len);
         if  (0  <  s->writeLenLeft)  {
-            s->writeCur  =  s->writePacket->body;
+            s->writeCur  =  s->writePacket->p_body.get()->body;
         }
       }  else  {  break;  }
     }  //  if  (s->writeHeaderPending
 
     //  write packet body:
     while  (s->writeLenLeft  >  0)  {
+//#ifdef Debug
+//  if  (logLevel>4)  {
+//    iLog->log("i","[EpolSrv::handleWrite]:s->writeLenLeft=%i", s->writeLenLeft);
+//  }
+//#endif
       int  res  =  SSL_write(s->sslStaff,  s->writeCur,  s->writeLenLeft);
       if  (res<=0)  {
-        if  (SSL_ERROR_WANT_WRITE  !=  SSL_get_error(s->sslStaff, res))  {
-          setFreeSocketID(s);
+//        if  (SSL_ERROR_WANT_WRITE  !=  SSL_get_error(s->sslStaff, res))  {
+//          setFreeSocketID(s);
+//        }
+        int er = SSL_get_error(s->sslStaff, res);
+        if  (SSL_ERROR_WANT_WRITE != er)  {
+#ifdef Debug
+  if  (logLevel > 4)  {
+    iLog->log("i","[EpolSrv::handleWrite]:SSL_get_error(%i)=%i", res, er);
+  }
+#endif
+            setFreeSocketID(s);
         }
+
         return;
       }
       s->writeLenLeft  -=  res;
@@ -324,9 +388,10 @@ void  EpolSrv::handleWrite(EpolSocket * s)  {
 
     //  if all writed :
     if (0==s->writeLenLeft) {
-      if  (s->writePacket->delete_after_send)  {
-        delete s->writePacket;
-      }
+      iLog->log("i","[EpolSrv::handleWrite]:END write pack[%llu] type %u to sock[%llu]"
+                ,s->writePacket, _NTOHL(s->writePacket->p_body.get()->header.pack_type), s);
+
+      delete s->writePacket;
       s->writePacket = nullptr;
     }
   }  while  (true);
@@ -407,7 +472,6 @@ void  EpolSrv::handleAccept()  {
       close(client_socket);
       break;
     }
-
     fcntl(client_socket, F_SETFL, flags | O_NONBLOCK);
 
     EpolSocket * s = getFreeSocket();
@@ -433,8 +497,8 @@ void  EpolSrv::handleAccept()  {
 
 void  EpolSrv::handleRead(EpolSocket  *s)  {
 #ifdef Debug
-  if  (logLevel>4)  {
-    iLog->log("i","[EpolSrv::handleWrite]: EpolSocket(%llu):%i",
+  if  (logLevel > 4)  {
+    iLog->log("i","[EpolSrv::handleRead]: EpolSocket(%llu):%i",
               s, s->_socket_id);
   }
 #endif
@@ -443,33 +507,43 @@ void  EpolSrv::handleRead(EpolSocket  *s)  {
     if  (!s->readPacket)  {
       s->readPacket  =  new  IPack();
       s->readHeaderPending  =  sizeof(T_IPack0_Network);
-      s->readCur  =  reinterpret_cast<char *>(&(s->readPacket->header));
+      s->readCur  =  reinterpret_cast<char *>(&(s->readPacket->p_body.get()->header));
     } // if  (!s->readPacket
     //  read header:
     if  (s->readHeaderPending  >  0)  {
       int  res  =  SSL_read(s->sslStaff,  s->readCur,  s->readHeaderPending);
       if  (res<=0)  {
-        if  (!SSL_ERROR_WANT_READ == SSL_get_error(s->sslStaff, res))  {
+//        if  (SSL_ERROR_WANT_READ != SSL_get_error(s->sslStaff, res))  {
+//          setFreeSocketID(s);
+//        }
+        int er = SSL_get_error(s->sslStaff, res);
+        if  (SSL_ERROR_WANT_READ != er)  {
+#ifdef Debug
+  if  (logLevel > 4)  {
+    iLog->log("i","[EpolSrv::handleRead]:SSL_get_error(%i)=%i", res, er);
+  }
+#endif
             setFreeSocketID(s);
         }
         break;
       }
       s->readCur  +=  res;
       s->readHeaderPending  -=  res;
-      if  (0==s->readHeaderPending)  {
-        T_IPack0_Network  *header  =  &(s->readPacket->header);
+      if  (0  ==  s->readHeaderPending)  {
+        IPackBody * b  =  s->readPacket->p_body.get();
+        T_IPack0_Network  *header  =  &(b->header);
         if  (IPack0::toHost(header))  {
           s->readLenLeft  =  header->body_len;
-          if  (s->readLenLeft>0)  {
-            s->readPacket->body  =  static_cast<char *>(malloc(header->body_len));
-            if  (!s->readPacket->body)  {
+          if  (s->readLenLeft  >  0)  {
+            b->body  =  static_cast<char *>(malloc(header->body_len));
+            if  (!b->body)  {
               setFreeSocketID(s);
               ohNoFreeRam();
               break;
             }
-            s->readCur = s->readPacket->body;
+            s->readCur  =  b->body;
           }
-          s->lastActTime = std::time(nullptr);
+          s->lastActTime  =  std::time(nullptr);
         }  else  {
           setFreeSocketID(s);
 #ifdef Debug
@@ -484,8 +558,17 @@ iLog->log("e","[EpolSrv::handleRead]: !IPack0::toHost(s->readPacket->header), s=
     while  (s->readLenLeft  >  0)  {
       int  res  =  SSL_read(s->sslStaff,  s->readCur,  s->readLenLeft);
       if  (res<=0)  {
-        if  (SSL_ERROR_WANT_READ  !=  SSL_get_error(s->sslStaff, res))  {
-          setFreeSocketID(s);
+//        if  (SSL_ERROR_WANT_READ  !=  SSL_get_error(s->sslStaff, res))  {
+//          setFreeSocketID(s);
+//        }
+        int er = SSL_get_error(s->sslStaff, res);
+        if  (SSL_ERROR_WANT_READ != er)  {
+#ifdef Debug
+  if  (logLevel > 4)  {
+    iLog->log("i","[EpolSrv::handleRead]:SSL_get_error(%i)=%i", res, er);
+  }
+#endif
+            setFreeSocketID(s);
         }
         return;
       }
@@ -495,7 +578,7 @@ iLog->log("e","[EpolSrv::handleRead]: !IPack0::toHost(s->readPacket->header), s=
 
     //  if all readed parse packet body:
     if  (0==s->readLenLeft)  {
-      T_IPack0_Network  *header  =  &(s->readPacket->header);
+      T_IPack0_Network  *header  =  &(s->readPacket->p_body.get()->header);
 #ifdef Debug
   if  (logLevel>4)  {
     iLog->log("i","[EpolSrv::handleRead]:EpolSocket(%llu):header:%llu,%llu,%llu,%llu",
@@ -507,38 +590,49 @@ iLog->log("e","[EpolSrv::handleRead]: !IPack0::toHost(s->readPacket->header), s=
          doPack11(s,  s->readPacket);
         break;
       case SPEC_PACK_TYPE_1:
-        s->all_received  =  false;
-        s->all_sended  =  false;
         /*  ABSL_FALLTHROUGH_INTENDED;  */
       case SPEC_PACK_TYPE_3:
       case SPEC_PACK_TYPE_5:
           /* packets without authentication yet */
+         --s->msgs_to_receive;
          s->readStack.push(s->readPacket);
          s->readPacket  =  nullptr;
          break;
       case SPEC_PACK_TYPE_2:
         if  (3==s->connectState
               &&  s->connectedGroup==header->key1)  {
-                        //((T_IPack1_Network *)(s->readPacket))->groupID) {
-                    /* send X509 from file cache */
-                    //TODO
+          /* send mail from file cache and forward tail to worker */
+          doPack2(s,  s->readPacket);
+          s->readPacket  =  nullptr;
         }  else  {
             //Protocol error
+#ifdef Debug
+  if  (logLevel>4 &&  s->connectedGroup!=header->key1)  {
+    iLog->log("i","[EpolSrv::handleRead]: Protocol error: connectedGroup %llu != %llu", s->connectedGroup, header->key1);
+  }
+#endif
             setFreeSocketID(s);
         }
         break;      
       case SPEC_PACK_TYPE_9:
 //        --s->msgs_to_receive;
 //        s->all_received  =  (s->msgs_to_receive  <=  0);
-        /*  ABSL_FALLTHROUGH_INTENDED;  */
+        /*  ABSL_FALLTHROUGH_INTENDED;  */             
       case SPEC_PACK_TYPE_6:        
       case SPEC_PACK_TYPE_8:
       case SPEC_PACK_TYPE_10:
+      case SPEC_PACK_TYPE_12:
+      case SPEC_PACK_TYPE_13:
         if  (3==s->connectState
              &&  s->connectedGroup==header->key1)  {
           s->readStack.push(s->readPacket);
           s->readPacket  =  nullptr;
         }  else  {
+#ifdef Debug
+  if  (logLevel>4 &&  s->connectedGroup!=header->key1)  {
+    iLog->log("i","[EpolSrv::handleRead]: Protocol error: connectedGroup %llu != %llu", s->connectedGroup, header->key1);
+  }
+#endif
           //Protocol error
           setFreeSocketID(s);
         }
@@ -551,11 +645,25 @@ iLog->log("e","[EpolSrv::handleRead]: !IPack0::toHost(s->readPacket->header), s=
           s->readPacket  =  nullptr;
         }  else  {
             //Protocol error
+#ifdef Debug
+  if  (logLevel > 4  &&  s->connectedGroup != header->key1)  {
+    iLog->log("i","[EpolSrv::handleRead]: Protocol error: connectedGroup %llu != %llu", s->connectedGroup, header->key1);
+  }
+#endif
            setFreeSocketID(s);
         }
         break;
+      case SPEC_PACK_TYPE_14:
+        // All done:
+        closeConnection(s);
+        break;
       default:
          /* Protocol error */
+#ifdef Debug
+  if  (logLevel > 4 )  {
+    iLog->log("i","[EpolSrv::handleRead]: Protocol error: default: header->pack_type = %u ", header->pack_type);
+  }
+#endif
          setFreeSocketID(s);
          break;
      } //switch
@@ -573,6 +681,22 @@ iLog->log("e","[EpolSrv::handleRead]: !IPack0::toHost(s->readPacket->header), s=
   } while (true);
   return;
 } //handleRead
+
+void EpolSrv::closeConnection(EpolSocket * s) {
+#ifdef Debug
+  if  (logLevel>4)  {
+    iLog->log("i","[EpolSrv::closeConnection]:EpolSocket(%llu)", s);
+  }
+#endif
+    if (-1!=s->_socket_id) {
+      if (s->sslStaff) {
+        SSL_shutdown(s->sslStaff);
+      }
+        close(s->_socket_id);
+        epoll_ctl(epollfd, EPOLL_CTL_DEL, s->_socket_id, NULL);
+        s->_socket_id = -1;
+    }
+}  //  closeConnection(s)
 
 void EpolSrv::setFreeSocketID(EpolSocket * s) {
 #ifdef Debug
@@ -821,6 +945,11 @@ void  EpolSrv::servThreadLoop()  {
           }  else  {
             uint32_t events  =  activeEvs[i].events;
             if  (events  &  EPOL_client_errors)  {
+#ifdef Debug
+              if  (logLevel > 3)  {
+                iLog->log("e","[EpolSrv::servThreadLoop()]: if  (events  &  EPOL_client_errors)");
+              }
+#endif
               setFreeSocketID(s);
             }  else  {
               if  (events  &  EPOLLIN)  {
@@ -910,6 +1039,11 @@ void  EpolSrv::handleSockets()  {
           &&  (lastActTime - s->lastActTime)  <=  idleConnLife)  {
         stackShakeSockets.push(s);
       }  else  {
+#ifdef Debug
+  if  (logLevel>4)  {
+    iLog->log("i","[EpolSrv::handleSockets()]: !!!!HANDSHAKE!!! timeout close socket[%llu]:  (lastActTime - s->lastActTime)  <=  idleConnLife)  ", s);
+  }
+#endif
         freeSocketToLocal(s);
       }
     } //else socket must be moved to free|work already
@@ -919,13 +1053,23 @@ void  EpolSrv::handleSockets()  {
   auto&&  it  =  connectedSockets.begin();
   while  (it!=connectedSockets.end())  {
     s  =  *it;
-    if  ((s->all_received  &&  s->all_sended  &&  s->groups_count<=0)
+    if  ((s->msgs_to_receive <= 0  &&  s->msgs_to_send <=0
+          &&  s->groups_count<=0  &&  !s->writePacket)
         ||  s->_socket_id  <  0
         ||  (lastActTime - s->lastActTime)  >  idleConnLife)  {
-#ifdef Debug
-  if  (logLevel>4)  {
-    iLog->log("i","[EpolSrv::handleSockets]: setFreeSocketID(%llu):all_received=%d, all_sended=%d, groups_count=%ll",
-      s, s->all_received,  s->all_sended,  s->groups_count);
+#ifdef Debug       
+  if  (logLevel  >  4)  {
+    std::string str("[EpolSrv::handleSockets]: DISCONNECT:");
+    if ((lastActTime - s->lastActTime)  >  idleConnLife) {
+      str.append("TIMEOUT:");
+    } else if (s->_socket_id  <  0) {
+      str.append("s->_socket_id  <  0:");
+    }
+    str.append("msgs_to_receive=").append(to_string(s->msgs_to_receive))
+        .append(", msgs_to_send=").append(to_string(s->msgs_to_send))
+        .append(", groups_count=").append(to_string(s->groups_count))
+        .append(", writePacket=").append(to_string(s->writePacket));
+    iLog->log("i",str.c_str());
   }
 #endif
       setFreeSocketID(s);
@@ -1030,6 +1174,7 @@ void  EpolSrv::logConnection(EpolSocket  *s,  sockaddr  *remote_addr,
 
 const char * EpolSrv::getMessagesPath() { return messagesPath.c_str();}
 const char * EpolSrv::getAvaCertsPath() { return avaCertsPath.c_str();}
+const  char * EpolSrv::getAvaPicPath() { return avaPicPath.c_str();}
 std::string EpolSrv::getServPassword() { return servPassword;}
 
 EpolSocket * EpolSrv::getStackSockNeedWorker() {
@@ -1075,32 +1220,61 @@ void EpolSrv::workerGoneDown(void * worker) {
 
 void  EpolSrv::doPack11(EpolSocket  *s,  IPack  *pack)  {
   int32_t  count  =  0;
-  T_IPack0_Network * header  =  &(pack->header);
+  IPackBody * b  =  pack->p_body.get();
+  T_IPack0_Network * header  =  &(b->header);
   if  (0==header->body_len)  {
     if  (header->key1  &&  specSSL->groupX509exists(header->key1))  {  ++count;  }
     if  (header->key2  &&  specSSL->groupX509exists(header->key2))  {  ++count;  }
     if  (header->key3  &&  specSSL->groupX509exists(header->key3))  {  ++count;  }
   }  else  {
-    IPack11::parsePackI(pack, &count);
-    uint64_t  *guid1sN  =  reinterpret_cast<uint64_t *>(pack->body);
+    IPack11::parsePackI(b, &count);
+    uint64_t  *guid1sN  =  reinterpret_cast<uint64_t *>(b->body);
     for  (int32_t  i  =  count;  i>=0;  --i)  {
       if (!specSSL->groupX509exists(guid1sN[i]))  {  --count;  }
     }
   }
   if  (count  <=  0)  {
     // There is no client group serviced:
+#ifdef Debug
+  if  (logLevel > 4)  {
+    iLog->log("i","[EpolSrv::doPack11]:  There is no client group serviced:(count  <=  0)");
+  }
+#endif
     setFreeSocketID(s);
   }  else  {
     s->groups_count  =  count;
+    s->msgs_to_receive += count * 3  -  2;
   }
 }  //  doPack11
 
+void  EpolSrv::doPack2(EpolSocket  *s,  IPack  *pack)  {
+  IPackBody * b  =  pack->p_body.get();
+  T_IPack0_Network * header  =  &(b->header);
+  TKey key;
+  key.key1  =  _HTONLL(header->key1);
+  key.key2  =  _HTONLL(header->key2);
+  key.key3  =  0ll;
+  IPack  *cached_pack  =  cache->getData(&key);
+  if  (cached_pack)  {
+    s->writeStackServer.push(cached_pack);
+#ifdef Debug
+  if  (logLevel>4)  {
+    iLog->log("i","[EpolSrv::doPack2]:");
+  }
+#endif
+  }  else  {
+    s->readStack.push(pack);
+  }
+  ++s->msgs_to_send;
+}  //  doPack2
+
 void  EpolSrv::doPack7(EpolSocket  *s,  IPack  *pack)  {
-    T_IPack0_Network * header  =  &(pack->header);
+  IPackBody * b  =  pack->p_body.get();
+    T_IPack0_Network * header  =  &(b->header);
     int32_t  lenArray  =  header->body_len / SIZE_2x_uint64_t;
     if  (lenArray>0)  {
       s->msgs_to_send  +=  lenArray;
-      uint64_t  *guid1sN  =  reinterpret_cast<uint64_t *>(pack->body);
+      uint64_t  *guid1sN  =  reinterpret_cast<uint64_t *>(b->body);
       uint64_t  *guid2sN  =  guid1sN  +  lenArray;
       TKey key;
       key.key1  =  _HTONLL(header->key1);
@@ -1134,7 +1308,7 @@ void  EpolSrv::doPack7(EpolSocket  *s,  IPack  *pack)  {
       }
     }
 
-    s->all_sended  =  (s->msgs_to_send  <=  0);
+
     --s->groups_count;
   return;
 }  //  doPack7

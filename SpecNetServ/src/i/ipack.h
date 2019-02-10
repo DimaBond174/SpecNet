@@ -22,34 +22,21 @@
 #include "spec/specstatic.h"
 #include <cmath>
 #include <cassert>
+#include <memory>
 
-#define SPEC_MARK_S 2109201808
-//#define SPEC_MARK_E 1510201815
-//#define SPEC_LEN_HEAD_1  (sizeof(uint32_t))
-//constexpr int SPEC_LEN_HEAD_2 = sizeof(uint32_t)+sizeof(uint32_t);
-//constexpr int SPEC_LEN_HEAD_3 = 3 * sizeof(uint32_t);
-//constexpr int SPEC_LEN_HEAD_4 = 4 * sizeof(uint32_t);
-
-constexpr uint32_t SIZE_2x_uint64_t = sizeof(uint64_t) * 2;
-
+#define  SPEC_MARK_S  2109201808
+constexpr  uint32_t  SIZE_2x_uint64_t  =  sizeof(uint64_t)  *  2;
 #define  MAX_CHANK  204800
-
-
-static const bool NO_NEED_hton = (1==htonl(1));
-static const bool NO_NEED_ntoh = (1==ntohl(1));
+static const bool  NO_NEED_hton  =  (1==htonl(1));
+static const bool  NO_NEED_ntoh  =  (1==ntohl(1));
 #define _HTONL(x) (NO_NEED_hton ? (x) : htonl(x))
 #define _NTOHL(x) (NO_NEED_ntoh ? (x) : ntohl(x))
 #define _HTONLL(x) (NO_NEED_hton ? (x) : (((uint64_t)htonl((x) & 0xFFFFFFFFUL)) << 32) | htonl((uint32_t)((x) >> 32)))
 #define _NTOHLL(x) (NO_NEED_ntoh ? (x) : (((uint64_t)ntohl((x) & 0xFFFFFFFFUL)) << 32) | ntohl((uint32_t)((x) >> 32)))
-//#define HTONLL(x) ((1==htonl(1)) ? (x) : (((uint64_t)htonl((x) & 0xFFFFFFFFUL)) << 32) | htonl((uint32_t)((x) >> 32)))
-//#define NTOHLL(x) ((1==ntohl(1)) ? (x) : (((uint64_t)ntohl((x) & 0xFFFFFFFFUL)) << 32) | ntohl((uint32_t)((x) >> 32)))
-static const uint32_t N_SPEC_MARK_S = _HTONL(SPEC_MARK_S);
-//static uint32_t N_SPEC_MARK_E = _HTONL(SPEC_MARK_E);
+static const  uint32_t  N_SPEC_MARK_S  =  _HTONL(SPEC_MARK_S);
 
 
 /* Conversation protocol between server and client */
-//The client sends a list of all the groups in which he is a member:
-#define  SPEC_PACK_TYPE_11  11
 
 //The client sends a one of their membership in the groups:
 #define  SPEC_PACK_TYPE_1  1
@@ -59,6 +46,7 @@ static const uint32_t N_SPEC_MARK_S = _HTONL(SPEC_MARK_S);
 
 //The client sends certificates:
 #define  SPEC_PACK_TYPE_3  3
+static  const  uint32_t  N_SPEC_PACK_TYPE_3  =  _HTONL(SPEC_PACK_TYPE_3);
 
 //The server sends a test cryptographic task for certificate to check if PKEY exists:
 //If the server does not serve this group, then the job will be empty
@@ -87,6 +75,18 @@ static  const  uint32_t  N_SPEC_PACK_TYPE_9  =  _HTONL(SPEC_PACK_TYPE_9);
 #define  SPEC_PACK_TYPE_10  10
 static  const  uint32_t  N_SPEC_PACK_TYPE_10  =  _HTONL(SPEC_PACK_TYPE_10);
 
+//The client sends a list of all the groups in which he is a member:
+#define  SPEC_PACK_TYPE_11  11
+
+//Ask for avatar personal information, picture:
+#define  SPEC_PACK_TYPE_12  12
+
+//Avatar personal information, picture:
+#define  SPEC_PACK_TYPE_13  13
+
+//All Done:
+#define  SPEC_PACK_TYPE_14  14
+
 //If the client detects unknown senders in the mail,
 //it requests the certificates of these senders with
 //SPEC_PACK_TYPE_2 request, and the server responds with SPEC_PACK_TYPE_3
@@ -114,167 +114,66 @@ struct  {
 
 using T_IPack0_Network = TKey;
 
-class  IPack  {
+class  IPackBody  {
  public:
-  IPack * nextIStack; //IStack interface (faster than vtable)
-  ~IPack()  {
+  ~IPackBody()  {
     if  (body)  {  free(body);  }
-    guard  =  0;
   }
-
-  bool  delete_after_send  =  true;
 //  Common header:
   T_IPack0_Network  header;
 //  Common packet:
-  char  *  body  =  nullptr;
-//  Guard: TODO delete it:
-  uint32_t  guard  =  20190101;
+  char  *body  =  nullptr;
+//  Cached flag to do not search in cache:
+  bool  not_cached  =  true;
 };
 
-class IPack0
-{
-public:
-    static bool toHost(T_IPack0_Network * header){
-        if (N_SPEC_MARK_S==header->spec_mark){
-            header->body_len = _NTOHL(header->body_len);
-            if (MAX_CHANK<header->body_len) { return false;}
-            header->pack_type = _NTOHL(header->pack_type);
-            header->key1 = _NTOHLL(header->key1);
-            header->key2 = _NTOHLL(header->key2);
-            header->key3 = _NTOHLL(header->key3);
-            return true;
-        }
-        return false;
-    }
+class  IPack  {
+ public:  
+  IPack * nextIStack; //IStack interface (faster than vtable)
+  std::shared_ptr<IPackBody> p_body;
 
-    static void toNetwork(T_IPack0_Network & header){
-        header.spec_mark = N_SPEC_MARK_S;
-        header.body_len = _HTONL(header.body_len);
-        header.pack_type = _HTONL(header.pack_type);
-        header.key1 = _HTONLL(header.key1);
-        header.key2 = _HTONLL(header.key2);
-        header.key3 = _HTONLL(header.key3);
-    }
-
-
-//    static char * eatPacket(IAlloc * iAlloc, char * packet) {
-//        T_IPack0_Network * in = (T_IPack0_Network *)packet;
-//        char * re = nullptr;
-//        if (N_SPEC_MARK_S==in->spec_mark){
-//            uint32_t size = _NTOHL(in->pack_len);
-//            if (size>0 && size<MAX_CHANK) {
-//                re = (char *)iAlloc->specAlloc(size);
-//                if (re) {
-//                    T_IPack0_Network * out = (T_IPack0_Network *)re;
-//                    out->pack_len = size;
-//                    out->spec_mark = SPEC_MARK_S;
-//                    out->pack_type = _NTOHL(in->pack_type);
-//                }
-//            }
-//        }
-
-//        return re;
-//    }
-
-//    /* for internal trusted use */
-//    static uint32_t lenPacket(char * packet) {
-//        uint32_t * headers = (uint32_t *)packet;
-//        uint32_t re = _NTOHL(headers[1]);
-//        if (re>MAX_CHANK) { re = 0;}
-//        return re;
-//    }
-
-//    /* from packet to send with SPEC_MARK */
-//    static uint32_t getTypeOut(char * packet) {
-//        uint32_t * headers = (uint32_t *)packet;
-//        return _NTOHL(headers[2]);
-//    }
-
-//    /* after receiving for header without SPEC_MARK */
-//    static uint32_t getTypeIn(char * packet) {
-//        uint32_t * headers = (uint32_t *)packet;
-//        return _NTOHL(headers[1]);
-//    }
-
-    /*
-     * Preparing standard headers
-     * packet = buf where first bytes for headers
-     * len  = meaning data lenght without headers lenght
-     * type = type of the packet
-     * !!! Packet {lenght} should be without lenHead0 when creating !!! */
-//    static void setHeaders(void * packet, uint32_t len, uint32_t type){
-//    static void setHeader(T_IPack0_Network &header, uint32_t len, uint32_t type){
-//        header.spec_mark = N_SPEC_MARK_S;
-//        header.pack_len = _HTONL(len);
-//        header.pack_type = _HTONL(type);
-//    }
-
+  IPack()  :  p_body(std::make_shared<IPackBody>())  {  }
+  IPack(IPack *other)  :  p_body(other->p_body)  {  }
 };
 
-//class IPack111
-//{
-//public:
-//    static char * createPacket(IAlloc * iAlloc, const char * str, uint32_t len) {
-//        /* alloc for data + headers */
-//        char * re = (char *)iAlloc->specAlloc(len+SPEC_LEN_HEAD_3);
-//        if (re) {
-//            IPack0::setHeaders(re, len, 1);
-//            memcpy(re+SPEC_LEN_HEAD_3, str, len);
-
-//            /* headers to see */
-////            uint32_t * headers = (uint32_t *)re;
-////            long metka = ntohl(headers[0]);
-////            long size = ntohl(headers[1]);
-////            long type = ntohl(headers[2]);
-////            headers = nullptr;
-//        }
-//        return re;
-//    }
-
-//    static std::string parsePack(const char * pack){
-//        uint32_t len = *((uint32_t*)(pack));
-//        if (len > 0 && len < MAX_CHANK) {
-//            return std::string(pack + SPEC_LEN_HEAD_2, len - SPEC_LEN_HEAD_1);
-//        }
-//        return std::string();
-//    }
-
-//};
-
-
-
-/*
- * IPack1
- * =Type1 - Client tells about membership
- * =Type2 - Server or client asks for cert X509
-*/
-//struct {
-//    uint64_t groupID;
-//    uint64_t avatarID;
-//} typedef T_IPack1_struct;
-
-//struct {
-//    T_IPack0_Network header;
-//    uint64_t groupID;
-//    uint64_t avatarID;
-//} typedef T_IPack1_Network;
-
-
-
-class IPack1
-{    
-public:
-
-    static  IPack * createPacket(uint64_t groupID, uint64_t avatarID,  uint32_t type) {
-        IPack * re = new IPack();
-        re->header.body_len = 0;
-        re->header.pack_type = type;
-        re->header.key1 = groupID;
-        re->header.key2 = avatarID;
-        re->header.key3 = 0;
-        IPack0::toNetwork(re->header);
-        return re;
+class  IPack0  {
+ public:
+  static bool  toHost(T_IPack0_Network  *header)  {
+  if  (N_SPEC_MARK_S  ==  header->spec_mark)  {
+    header->body_len  =  _NTOHL(header->body_len);
+    if  (MAX_CHANK  <  header->body_len)  {  return false;  }
+      header->pack_type  =  _NTOHL(header->pack_type);
+      header->key1  =  _NTOHLL(header->key1);
+      header->key2  =  _NTOHLL(header->key2);
+      header->key3  =  _NTOHLL(header->key3);
+      return  true;
     }
+    return  false;
+  }
+
+  static void  toNetwork(T_IPack0_Network  &header)  {
+    header.spec_mark  =  N_SPEC_MARK_S;
+    header.body_len  =  _HTONL(header.body_len);
+    header.pack_type  =  _HTONL(header.pack_type);
+    header.key1  =  _HTONLL(header.key1);
+    header.key2  =  _HTONLL(header.key2);
+    header.key3  =  _HTONLL(header.key3);
+  }
+};
+
+class  IPack1  {
+ public:
+  static  IPack  *createPacket(uint64_t  groupID,  uint64_t  avatarID,  uint32_t  type)  {
+    IPack  *re  =  new  IPack();
+    IPackBody  *b = re->p_body.get();
+    b->header.body_len  =  0;
+    b->header.pack_type  =  type;
+    b->header.key1  =  groupID;
+    b->header.key2  =  avatarID;
+    b->header.key3  =  0;
+    IPack0::toNetwork(b->header);
+    return  re;
+  }
 };
 
 /*
@@ -283,97 +182,32 @@ public:
  * =Type4 - Server's test cryptographic task
  * =Type5 - Client answer with cryptographic result
 */
-//struct {
-//    uint32_t  strLen;
-//    uint64_t  guid1;
-//    uint64_t  guid2;
-//    const char * str;
-//} typedef T_IPack3_struct;
+class  IPack3  {
+ public:
+  static  void  toIPack3(IPackBody  *pack,
+      const char  *body,  uint32_t  bodyLen,  uint32_t type)  {
+    pack->header.body_len  =  bodyLen;
+    pack->header.pack_type  =  type;
+    IPack0::toNetwork(pack->header);
+    if  (pack->body)  {  free(pack->body);  }
+    pack->body  =  static_cast<char *>(malloc(bodyLen));
+    memcpy((void *)(pack->body),  body,  bodyLen);
+  }
 
-//struct {
-//    T_IPack0_Network header;
-//    uint32_t  strLen;
-//    uint64_t  guid1;
-//    uint64_t  guid2;
-//} typedef T_IPack3_Network;
-
-class IPack3
-{
-public:
-    static  void toIPack3(IPack * pack,
-                                const char * body, uint32_t  bodyLen,
-                                uint32_t type) {
-        pack->header.body_len = bodyLen;
-        pack->header.pack_type = type;
-        IPack0::toNetwork(pack->header);
-        if (pack->body) { free(pack->body);}
-        pack->body = static_cast<char *>(malloc(bodyLen));
-        memcpy((void *)(pack->body), body, bodyLen);
-    }
-
-    static  IPack * createPacket(uint64_t  guid1, uint64_t  guid2,
-                                const char * body, uint32_t  bodyLen,
-                                uint32_t type) {
-        IPack * re = new IPack();
-        re->header.body_len = bodyLen;
-        re->header.pack_type = type;
-        re->header.key1 = guid1;
-        re->header.key2 = guid2;
-        re->header.key3 = 0;
-        IPack0::toNetwork(re->header);
-        re->body = static_cast<char *>(malloc(bodyLen));
-        memcpy((void *)(re->body), body, bodyLen);
-        return re;
-    }
-
-//    static IPack * createPacket(IAlloc * iAlloc, T_IPack3_struct & iStruct, uint32_t type) {
-//        /* alloc for data + headers */
-//        uint32_t size = sizeof(T_IPack3_Network)
-//                + iStruct.strLen
-//                + sizeof(uint32_t);//endMark
-//        char * re = (char *)iAlloc->specAlloc(size);
-//        if (re) {
-//        //Mark end of packet:
-//            uint32_t * endMark =(uint32_t *)(re + size - sizeof(uint32_t));
-//            *endMark = N_SPEC_MARK_E;
-//            T_IPack3_Network * pack = (T_IPack3_Network *)re;
-//            IPack0::setHeader(pack->header, size, type);
-//            pack->strLen = _HTONL(iStruct.strLen);
-//            pack->guid1  = _HTONLL(iStruct.guid1);
-//            pack->guid2  = _HTONLL(iStruct.guid2);
-//            if (iStruct.strLen>0) {
-//                memcpy((void *)(re+sizeof(T_IPack3_Network)), iStruct.str, iStruct.strLen);
-//            }
-//        #ifdef Debug
-//        //Template for check overflow:
-//                assert(N_SPEC_MARK_E==*endMark);
-//        #endif
-//        }
-//        return re;
-//    }
-
-
-//     static bool parsePackI(T_IPack3_struct & res, const char * pack){
-//        bool re = false;
-//        //faux loop
-//        do {
-//            T_IPack3_Network * in = (T_IPack3_Network *)pack;
-//            if (sizeof(T_IPack3_Network) > in->header.pack_len) {break;}
-//            res.strLen = _NTOHL(in->strLen);
-//            if (res.strLen > MAX_CHANK) { break; }
-//            res.guid1  = _NTOHLL(in->guid1);
-//            res.guid2  = _NTOHLL(in->guid2);
-//            if (0==res.strLen) {
-//                res.str = nullptr;
-//            } else {
-//                res.str = (const char *)(pack + sizeof(T_IPack3_Network));
-//            }
-//            re = true;
-//        } while (false);
-
-//        return re;
-//    }
-
+  static  IPack * createPacket(uint64_t  guid1,  uint64_t  guid2,
+      const char  *body,  uint32_t  bodyLen,  uint32_t type)  {
+    IPack  *re  =  new IPack();
+    IPackBody  *b = re->p_body.get();
+    b->header.body_len  =  bodyLen;
+    b->header.pack_type  =  type;
+    b->header.key1  =  guid1;
+    b->header.key2  =  guid2;
+    b->header.key3  =  0;
+    IPack0::toNetwork(b->header);
+    b->body  =  static_cast<char *>(malloc(bodyLen));
+    memcpy(reinterpret_cast<void *>(b->body),  body,  bodyLen);
+    return  re;
+  }
 }; //IPack3
 
 
@@ -400,7 +234,7 @@ struct {
 
 class  IPack6  {
  public:
-  static  void  toIPack6(IPack  *pack,
+  static  void  toIPack6(IPackBody  *pack,
       uint32_t  lenArray,
       int64_t  groupID,
       int64_t  *guid1s,
@@ -427,7 +261,7 @@ class  IPack6  {
       pack->header.key2  =  0;
       pack->header.key3  =  0;
       pack->body  =  static_cast<char *>(malloc(size));
-      uint64_t  *guid1sN  =  (uint64_t *)(pack->body);
+      uint64_t  *guid1sN  =  reinterpret_cast<uint64_t *>(pack->body);
       uint64_t  *guid2sN  =  guid1sN + lenArray;
       uint64_t tmp;
       for  (uint32_t  i=0;  i<lenArray;  ++i)  {
@@ -447,34 +281,35 @@ class  IPack6  {
       int64_t * guid2s,
       uint32_t type) {
     IPack * re  =  new  IPack();
-    re->header.pack_type  =  type;
-    re->header.key1  =  groupID;
+    IPackBody  *b = re->p_body.get();
+    b->header.pack_type  =  type;
+    b->header.key1  =  groupID;
     if (0==lenArray)  {
-      re->header.body_len  =  0;
-      re->header.key2  =  0;
-      re->header.key3  =  0;
+      b->header.body_len  =  0;
+      b->header.key2  =  0;
+      b->header.key3  =  0;
     } else if  (1==lenArray)  {
-      re->header.body_len  =  0;
-      re->header.key2  =  guid1s[0];
-      re->header.key3  =  guid2s[0];
+      b->header.body_len  =  0;
+      b->header.key2  =  guid1s[0];
+      b->header.key3  =  guid2s[0];
     } else {
       uint32_t size  =  lenArray * SIZE_2x_uint64_t;
-      re->header.body_len  =  size;
-      re->header.key2  =  0;
-      re->header.key3  =  0;
-      re->body  =  static_cast<char *>(malloc(size));
-      uint64_t  *guid1sN  =  reinterpret_cast<uint64_t *>(re->body);
+      b->header.body_len  =  size;
+      b->header.key2  =  0;
+      b->header.key3  =  0;
+      b->body  =  static_cast<char *>(malloc(size));
+      uint64_t  *guid1sN  =  reinterpret_cast<uint64_t *>(b->body);
       uint64_t  *guid2sN  =  guid1sN + lenArray;
       for  (uint32_t  i  =  0;  i<lenArray;  ++i)  {
         guid1sN[i]  =  _HTONLL(guid1s[i]);
         guid2sN[i]  =  _HTONLL(guid2s[i]);
       }
     }
-    IPack0::toNetwork(re->header);
+    IPack0::toNetwork(b->header);
     return re;
   }
 
-  static  bool  parsePackI(T_IPack6_struct  &res,  IPack  *pack)  {
+  static  bool  parsePackI(T_IPack6_struct  &res,  IPackBody  *pack)  {
     res.groupID  =  pack->header.key1;
     if  (pack->header.body_len > 0)  {
       uint32_t  len  =  pack->header.body_len / SIZE_2x_uint64_t;
@@ -514,7 +349,7 @@ struct  {
 
 class  IPack9  {
  public:
-  static  void  toIPack9(IPack  *pack,  T_IPack9_struct  &iStruct,
+  static  void  toIPack9(IPackBody  *pack,  T_IPack9_struct  &iStruct,
       uint32_t  type)  {
     if  (pack->body)  {
       free(pack->body);
@@ -541,16 +376,17 @@ class  IPack9  {
 
   static  IPack * createPacket(T_IPack9_struct  &iStruct,  uint32_t  type)  {
     IPack  *re  =  new  IPack();
-    re->header.pack_type  =  type;
-    re->header.key1  =  iStruct.guid1;
-    re->header.key2  =  iStruct.guid2;
-    re->header.key3  =  iStruct.guid3;
+    IPackBody  *b = re->p_body.get();
+    b->header.pack_type  =  type;
+    b->header.key1  =  iStruct.guid1;
+    b->header.key2  =  iStruct.guid2;
+    b->header.key3  =  iStruct.guid3;
     uint32_t  len  =  SIZE_2x_uint64_t  +  iStruct.strLen;
-    re->header.body_len  =  len;
+    b->header.body_len  =  len;
     //HTON header:
-    IPack0::toNetwork(re->header);
-    re->body  =  reinterpret_cast<char *>(malloc(len));
-    uint64_t  *guidX  =  reinterpret_cast<uint64_t *>(re->body);
+    IPack0::toNetwork(b->header);
+    b->body  =  static_cast<char *>(malloc(len));
+    uint64_t  *guidX  =  reinterpret_cast<uint64_t *>(b->body);
     *guidX  =  _HTONLL(iStruct.guid4);
     ++guidX;
     *guidX  =  _HTONLL(iStruct.guid5);
@@ -561,7 +397,7 @@ class  IPack9  {
     return re;
   }
 
-  static  bool  parsePackI(T_IPack9_struct  &res,  IPack  *pack)  {
+  static  bool  parsePackI(T_IPack9_struct  &res,  IPackBody  *pack)  {
     if  (!pack->body  ||  pack->header.body_len<SIZE_2x_uint64_t)  {
       return false;
     }
@@ -587,37 +423,38 @@ class  IPack11  {
       uint64_t  *groupIDs,  //std::vector::data()
       uint32_t  type) {
     IPack  *re  =  new  IPack();
-    re->header.pack_type  =  type;
-    re->header.key1  =  0;
-    re->header.key2  =  0;
-    re->header.key3  =  0;
+    IPackBody  *b = re->p_body.get();
+    b->header.pack_type  =  type;
+    b->header.key1  =  0;
+    b->header.key2  =  0;
+    b->header.key3  =  0;
     if  (lenArray < 4)  {
-      re->header.body_len  =  0;
+      b->header.body_len  =  0;
       if  (lenArray  >  0)  {
-        re->header.key1  =  groupIDs[0];
+        b->header.key1  =  groupIDs[0];
       }
       if  (lenArray  >  1)  {
-        re->header.key2  =  groupIDs[1];
+        b->header.key2  =  groupIDs[1];
       }
       if  (lenArray  ==  3)  {
-        re->header.key2  =  groupIDs[2];
+        b->header.key2  =  groupIDs[2];
       }
     }  else  {
       uint32_t  size  =  lenArray  *  sizeof(uint64_t);
-      re->header.body_len  =  size;
-      re->body  =  static_cast<char *>(malloc(size));
-      uint64_t  *guid1sN  =  reinterpret_cast<uint64_t *>(re->body);
+      b->header.body_len  =  size;
+      b->body  =  static_cast<char *>(malloc(size));
+      uint64_t  *guid1sN  =  reinterpret_cast<uint64_t *>(b->body);
       for  (uint32_t  i  =  0;  i<lenArray;  ++i)  {
         guid1sN[i]  =  _HTONLL(groupIDs[i]);
       }
     }
-    IPack0::toNetwork(re->header);
+    IPack0::toNetwork(b->header);
     return re;
   }
 
 
   /*  Used to convert the array only if body_len longer than 0  */
-  static  void  parsePackI(IPack  *in_pack, int32_t  *out_size)  {
+  static  void  parsePackI(IPackBody  *in_pack, int32_t  *out_size)  {
     int32_t  size  =  in_pack->header.body_len / sizeof(uint64_t);
     uint64_t  *guid1sN  =  reinterpret_cast<uint64_t *>(in_pack->body);
     for  (int32_t  i  =  0;  i<size;  ++i)  {
@@ -668,17 +505,18 @@ class  OnCache  {
     TONode  *curFound  =  find(key) ;
     if  (curFound)  {
       toTopUsage(curFound);
-      return  curFound->data;
+      //return  curFound->data;
+      return new IPack(curFound->data);
     }
     return nullptr;
   }
 
-  /*  put packet in the cache.
-   * WARNING:  data must be marked with: data->delete_after_send  =  false;
- */
-  void  insertNode  (TKey  const  *key,  IPack  *data)  {
-    data->delete_after_send  =  false;
-    assert(data->guard  ==  20190101);
+
+  void  insertNode  (IPack  *data_)  {
+    IPack  *data  =  new IPack(data_);
+    IPackBody * b  =  data->p_body.get();
+    b->not_cached  =  false;
+    TKey  *key  =  &(b->header);
     const  uint64_t  hash  =  getHash(key);//key->hash();
     const  uint32_t  basketID  = hash % _hash_baskets;
     int  cmp  =  setll(hash,  key,  basketID);

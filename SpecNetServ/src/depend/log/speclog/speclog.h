@@ -1,3 +1,11 @@
+/*
+ * This is the source code of SpecNet project
+ * It is licensed under MIT License.
+ *
+ * Copyright (c) Dmitriy Bondarenko
+ * feel free to contact me: specnet.messenger@gmail.com
+ */
+
 #ifndef SPECLOG_H
 #define SPECLOG_H
 
@@ -5,28 +13,25 @@
 #include <fstream>
 #include <mutex>
 
-class SpecLog  : public ILog
-{
-public:
-    SpecLog();
-    bool start()     override;
-    void stop()      override;
-    void rawLog(const char * lvl, const std::string &str) override;
+class SpecLog  :  public ILog  {
+ public:
+  SpecLog();
+  bool  start()  override;
+  void  stop()  override;
+  void  rawLog(const char  *lvl, const std::string &str)  override;
 
-
-private:
-
-    std::timed_mutex loglock;
+ private:
+  std::timed_mutex  loglock;
     /* Protected by loglock: */
-    unsigned long maxLogSize = 0ll;
-    unsigned long logFiles   = 0ll;
-    std::string logPathBase;
-    std::string logPathDir;
-    long long curLogSize = 0ll;
-    std::ofstream logfs;
+  long long  maxLogSize  =  0ll;
+  long long  logFiles  =  0ll;
+  std::string  logPathBase;
+  std::string  logPathDir;
+  long long  curLogSize = 0ll;
+  std::ofstream  logfs;
 
-    void openNextLog();
-    void closeLog();
+  void  openNextLog();
+  void  closeLog();
     /*  \loglock  */
 };
 

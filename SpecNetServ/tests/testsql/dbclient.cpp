@@ -12,8 +12,7 @@
 #include "string.h"
 #include "i/ipack.h"
 
-DBClient::DBClient()
-{
+DBClient::DBClient()  {
 
 }
 
@@ -158,7 +157,7 @@ bool DBClient::_execSQL(const char * sql) {
 
 bool DBClient::createDB() {
     bool re = false;
-    const int nsql = 7;
+    const int nsql = 6;
     const char *sql[nsql] = {
         "create table IF NOT EXISTS t_version (version integer);",
         "create table IF NOT EXISTS t_servers (name text NOT NULL, "\
@@ -172,13 +171,19 @@ bool DBClient::createDB() {
                 "id_group integer NOT NULL, "\
                 "remote_id_avatar integer NOT NULL, "\
                 "my_id_avatar integer NOT NULL, "\
-                "PRIMARY KEY (date_msg,id_msg,id_group));",
-        "create index IF NOT EXISTS ix_messages1_to ON t_messages (id_group, remote_id_avatar, date_msg);",
+                "status integer NOT NULL, "\
+                "PRIMARY KEY (date_msg,id_msg,id_group));",        
         "create table IF NOT EXISTS t_path (date_msg integer NOT NULL, "\
                 "id_msg integer NOT NULL, "\
                 "id_group integer NOT NULL, "\
                 "id_server integer NOT NULL, "\
                 "PRIMARY KEY (date_msg,id_msg,id_group, id_server));"
+//куда класть исходящие в привате?:  "create table IF NOT EXISTS t_priv_messages (date_msg integer NOT NULL, "\
+//              "id_msg integer NOT NULL, "\
+//              "id_group integer NOT NULL, "\
+//              "remote_id_avatar integer NOT NULL, "\
+//              "my_id_avatar integer NOT NULL, "\
+//              "PRIMARY KEY (date_msg,id_msg,id_group));",
     };
     int i = 0;
     for(; i < nsql; ++i) {
@@ -246,44 +251,85 @@ bool DBClient::updateDB(int curVersion) {
     return DB_VERSION == curVersion;
 }
 
-static const char *  sqlInsertMsg =
-        "insert into t_messages (date_msg,id_msg,id_group,remote_id_avatar,my_id_avatar) values (?,?,?,?,?)";
-bool DBClient::storeMessage(int64_t id_group, int64_t remote_id_avatar, int64_t my_id_avatar,
-                            int64_t id_msg, int64_t date_msg, const char * data, uint32_t len) {
-    /* let's store file */
-    bool re = false;
+//static const char *  sqlInsertMsg =
+//        "insert into t_messages (date_msg,id_msg,id_group,remote_id_avatar,my_id_avatar) values (?,?,?,?,?)";
+
+bool  DBClient::storeMessage(int64_t  id_group,  int64_t  remote_id_avatar,
+    int64_t  my_id_avatar,  int64_t  id_msg,  int64_t  date_msg,
+    const char  *data,  uint32_t  len)  {
+  bool re = false;
+  if  (remote_id_avatar  <  0)  {
+    remote_id_avatar  =  get_any_knownAvatar(id_group,  my_id_avatar);
+  }
+  static constexpr ConstString  sqlInsertMsg  {
+    "INSERT INTO t_messages (date_msg,id_msg,id_group,remote_id_avatar,my_id_avatar,status) VALUES (?,?,?,?,?,0)"
+  };
     //faux loop:
-    do {
-            if (!stmtInsertMsg || SQLITE_OK !=sqlite3_reset(stmtInsertMsg)) {
-                //const char *pzTest;
-                 if (SQLITE_OK != sqlite3_prepare_v3(db, sqlInsertMsg, strlen(sqlInsertMsg),
-                                                     SQLITE_PREPARE_PERSISTENT, &stmtInsertMsg, NULL)) {
-                     break;
-                 }
-            }
-            char * cur = printULong(id_group, pathSuffix, pathEnd);
-            *cur='/'; ++cur;
-            cur = printULong(TO12(date_msg), cur, pathEnd);
-            *cur='/'; ++cur;
-            cur = printULong(id_msg, cur, pathEnd);
-            cur = printULong(date_msg, cur, pathEnd);
-            if (1!=_iFileAdapter->saveTFile(pathFull, data, len)){break;}
-
-            sqlite3_bind_int64(stmtInsertMsg, 1, date_msg);
-            sqlite3_bind_int64(stmtInsertMsg, 2, id_msg);
-            sqlite3_bind_int64(stmtInsertMsg, 3, id_group);
-            sqlite3_bind_int64(stmtInsertMsg, 4, remote_id_avatar);
-            sqlite3_bind_int64(stmtInsertMsg, 5, my_id_avatar);
-            sqlite3_step(stmtInsertMsg);
-
-            re = true;
-    } while (false);
-    return re;
-
+  do  {
+    if  (!stmtInsertMsg  ||  SQLITE_OK  != sqlite3_reset(stmtInsertMsg))  {
+      if  (SQLITE_OK  !=  sqlite3_prepare_v3(db,  sqlInsertMsg.c_str,
+          sqlInsertMsg.size,  SQLITE_PREPARE_PERSISTENT,  &stmtInsertMsg,  NULL))  {
+        break;
+      }
+    }
+    //  save  msg  to  disk:
+    char  *cur  =  printULong(id_group,  pathSuffix,  pathEnd);
+    *cur  =  '/';  ++cur;
+    cur  =  printULong(TO12(date_msg),  cur,  pathEnd);
+    *cur  =  '/';  ++cur;
+    cur  =  printULong(id_msg, cur, pathEnd);
+    cur  =  printULong(date_msg, cur, pathEnd);
+    if  (1  !=  _iFileAdapter->saveTFile(pathFull,  data,  len))  {  break;  }
+    //  save  msg  to  database:
+    sqlite3_bind_int64(stmtInsertMsg,  1,  date_msg);
+    sqlite3_bind_int64(stmtInsertMsg,  2,  id_msg);
+    sqlite3_bind_int64(stmtInsertMsg,  3,  id_group);
+    sqlite3_bind_int64(stmtInsertMsg,  4,  remote_id_avatar);
+    sqlite3_bind_int64(stmtInsertMsg,  5,  my_id_avatar);
+    sqlite3_step(stmtInsertMsg);
+    re = true;
+  }  while  (false);
+  return re;
 }//storeMessage
 
 
-
+//bool  DBClient::storePrivateMessage(int64_t  id_group,  int64_t  remote_id_avatar,
+//    int64_t  my_id_avatar,  int64_t  id_msg,  int64_t  date_msg,
+//    const char  *data,  uint32_t  len)  {
+//  bool re = false;
+//  if  (remote_id_avatar  <  0)  {
+//    remote_id_avatar  =  get_any_knownAvatar(id_group,  my_id_avatar);
+//  }
+//  static constexpr ConstString  sqlInsertMsg  {
+//    "INSERT INTO t_messages (date_msg,id_msg,id_group,remote_id_avatar,my_id_avatar,status) VALUES (?,?,?,?,?,0)"
+//  };
+//    //faux loop:
+//  do  {
+//    if  (!stmtInsertMsg  ||  SQLITE_OK  != sqlite3_reset(stmtInsertMsg))  {
+//      if  (SQLITE_OK  !=  sqlite3_prepare_v3(db,  sqlInsertMsg.c_str,
+//          sqlInsertMsg.size,  SQLITE_PREPARE_PERSISTENT,  &stmtInsertMsg,  NULL))  {
+//        break;
+//      }
+//    }
+//    //  save  msg  to  disk:
+//    char  *cur  =  printULong(id_group,  pathSuffix,  pathEnd);
+//    *cur  =  '/';  ++cur;
+//    cur  =  printULong(TO12(date_msg),  cur,  pathEnd);
+//    *cur  =  '/';  ++cur;
+//    cur  =  printULong(id_msg, cur, pathEnd);
+//    cur  =  printULong(date_msg, cur, pathEnd);
+//    if  (1  !=  _iFileAdapter->saveTFile(pathFull,  data,  len))  {  break;  }
+//    //  save  msg  to  database:
+//    sqlite3_bind_int64(stmtInsertMsg,  1,  date_msg);
+//    sqlite3_bind_int64(stmtInsertMsg,  2,  id_msg);
+//    sqlite3_bind_int64(stmtInsertMsg,  3,  id_group);
+//    sqlite3_bind_int64(stmtInsertMsg,  4,  remote_id_avatar);
+//    sqlite3_bind_int64(stmtInsertMsg,  5,  my_id_avatar);
+//    sqlite3_step(stmtInsertMsg);
+//    re = true;
+//  }  while  (false);
+//  return re;
+//}  //  storePrivateMessage
 
 
 bool  DBClient::getNewMessages(int64_t groupID,
@@ -493,5 +539,55 @@ void  DBClient::delMsg(int64_t  id_group,  int64_t id_msg,  int64_t date_msg)  {
 
 }//delMsg
 
+void  DBClient::fill_knownAvatars()  {
+  static constexpr ConstString  sql  {
+    "SELECT id_group, id_avatar FROM t_avatars WHERE status>0"
+  };
+  sqlite3_stmt *stmt  =  nullptr;
+  if  (SQLITE_OK  !=  sqlite3_prepare(db,  sql.c_str,  sql.size,
+      &stmt,  NULL))  {
+    return;
+  }
 
+  while  (SQLITE_ROW==sqlite3_step(stmt))  {
+    knownAvatars.emplace(sqlite3_column_int64(stmt,  0), sqlite3_column_int64(stmt,  1));
+  }
 
+  return;
+}
+
+void  DBClient::insertNewAvatar(int64_t  id_group, int64_t  id_avatar,  int64_t  status)  {
+  if (knownAvatars.empty())  {  fill_knownAvatars();  }
+  static constexpr ConstString  sql  {
+    "INSERT INTO t_avatars (id_group,id_avatar,status)"\
+    " VALUES (?,?,?)"
+  };
+  if  (!stmtInsertAva  ||  SQLITE_OK != sqlite3_reset(stmtInsertAva))  {
+    if (SQLITE_OK  !=  sqlite3_prepare_v3(db,  sql.c_str,  sql.size,
+        SQLITE_PREPARE_PERSISTENT,  &stmtInsertAva,  NULL))  {
+           return;
+       }
+  }
+
+  sqlite3_bind_int64(stmtInsertAva, 1, id_group);
+  sqlite3_bind_int64(stmtInsertAva, 2, id_avatar);
+  sqlite3_bind_int64(stmtInsertAva, 3, status);
+  sqlite3_step(stmtInsertAva);
+
+  knownAvatars.emplace(id_group,  id_avatar);
+}  //  insertNewAvatar
+
+bool  DBClient::existAvatar(int64_t  id_group, int64_t  id_avatar)  {
+  if (knownAvatars.empty())  {  fill_knownAvatars();  }
+  return (knownAvatars.end()!=knownAvatars.find(Key_2_int64_t(id_group, id_avatar)));  
+}
+
+int64_t  DBClient::get_any_knownAvatar(int64_t  id_group,  int64_t my_id_avatar)  {
+  if (knownAvatars.empty())  {  fill_knownAvatars();  }
+  for  (auto&&  elem  :  knownAvatars)  {
+    if  (id_group==elem.key1  &&  my_id_avatar!=elem.key2)  {
+      return elem.key2;
+    }
+  }
+  return  0ll;
+}

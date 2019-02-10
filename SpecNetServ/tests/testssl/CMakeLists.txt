@@ -1,3 +1,9 @@
+# This is the source code of SpecNet project
+# It is licensed under MIT License.
+#
+#  Copyright (c) Dmitriy Bondarenko
+#  feel free to contact me: specnet.messenger@gmail.com
+#
 set(CUR_TEST "testssl")
 #custom_add_library_from_dir(${CUR_TEST})
 #set(LIB_SRC "")

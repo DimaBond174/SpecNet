@@ -1,3 +1,11 @@
+/*
+ * This is the source code of SpecNet project
+ * It is licensed under MIT License.
+ *
+ * Copyright (c) Dmitriy Bondarenko
+ * feel free to contact me: specnet.messenger@gmail.com
+ */
+
 #include "epolsocket.h"
 #include "spec/speccontext.h"
 
@@ -26,9 +34,8 @@ void  EpolSocket::clearOnStart()  {
   connectState  =  0;
   connectedGroup  =  0;
   lastActTime  =  0;
-  all_received  =  false;
-  msgs_to_receive  =  0;
-  all_sended  =  false;
+
+  msgs_to_receive  =  2; // type1 + type11
   msgs_to_send  =  0;
   groups_count  =  0;
 
@@ -40,14 +47,11 @@ void  EpolSocket::clearOnStart()  {
   writeLenLeft  =  0;
   writeCur  =  nullptr;
 
-    if (writePacket) {
-      if (writePacket->delete_after_send)  {
-         delete(writePacket);
-      }
+    if (writePacket) {      
+         delete(writePacket);      
          writePacket = nullptr;
     }
-    if (readPacket) {
-      assert(readPacket->delete_after_send);
+    if (readPacket) {      
          delete(readPacket);
          readPacket = nullptr;
     }
@@ -56,32 +60,22 @@ void  EpolSocket::clearOnStart()  {
     IPack * p;
     tmpStack.swap(readStack.getStack());
     while ((p = tmpStack.pop()) ) {
-#ifdef Debug
-    SpecContext::instance().iLog.get()->log("i","[EpolSocket::clearOnStart::readStack]: delete IPack:%llu", p);
-#endif
+//#ifdef Debug
+//    SpecContext::instance().iLog.get()->log("i","[EpolSocket::clearOnStart::readStack]: delete IPack:%llu", p);
+//#endif
         delete p;
     }
     tmpStack.swap(writeStack.getStack());
     while ((p = tmpStack.pop()) ) {
-#ifdef Debug
-    SpecContext::instance().iLog.get()->log("i","[EpolSocket::clearOnStart::writeStack]: delete IPack:%llu", p);
-#endif
+//#ifdef Debug
+//    SpecContext::instance().iLog.get()->log("i","[EpolSocket::clearOnStart::writeStack]: delete IPack:%llu", p);
+//#endif
         delete p;
     }
     while ((p = writeStackServer.pop()) ) {
-      if  (p->delete_after_send)  {
-#ifdef Debug
-    SpecContext::instance().iLog.get()->log("i","[EpolSocket::clearOnStart::writeStackServer]: delete IPack:%llu", p);
-#endif
-        delete p;
-      }
+        delete p;      
     }
-    while ((p = readStackWorker.pop()) ) {
-#ifdef Debug
-    SpecContext::instance().iLog.get()->log("i","[EpolSocket::clearOnStart::readStackWorker]: delete IPack:%llu", p);
-#endif
-        delete p;
-    }
+
     keepRun.store(true, std::memory_order_release);
 }//clearOnStart
 

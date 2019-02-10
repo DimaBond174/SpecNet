@@ -272,123 +272,113 @@ EVP_PKEY * SpecSSL::getX509evp(X509 * x509) {
 //    EVP_PKEY_free(evp);
 //}
 
-bool SpecSSL::checkX509(uint64_t  groupID,  uint64_t  avatarID,
-                        const char * strX509, int strX509len){
-    bool re = false;
-    BIO *bio = nullptr;
-    X509 * UScert = nullptr;
-    X509_STORE *sto = nullptr;
-    X509_STORE_CTX *ctx = nullptr;
+bool  SpecSSL::checkX509(uint64_t  groupID,  uint64_t  avatarID,
+    const char  *strX509,  int  strX509len)  {
+  bool  re  =  false;
+  BIO  *bio  =  nullptr;
+  X509  *UScert  =  nullptr;
+  X509_STORE  *sto  =  nullptr;
+  X509_STORE_CTX  *ctx  =  nullptr;
     //faux loop
-    do {
-        //std::map<unsigned long long, X509 *>::const_iterator it = specGroupX509s.find(groupID);
-      auto&& it = specGroupX509s.find(groupID);
-        if (specGroupX509s.end()==it) { break; }
-        X509 * CAcert = it->second;
-        BIO *bio = BIO_new_mem_buf((void*)strX509, strX509len);
-        if (!bio) { break; }
-        PEM_read_bio_X509(bio, &UScert, NULL, NULL);
-        if (!UScert) { break; }
-        //int hash = (int)(avatarID % 32767);
-        //long hash = (long)((avatarID ^ (avatarID >> 32))%2147483647);
-        long hash = avatarID % SPEC_LONG_MAX;
-        long serial = ASN1_INTEGER_get(X509_get_serialNumber (UScert));
-        if (serial!=hash) { break; }
-//        if (ASN1_INTEGER_get(X509_get_serialNumber (UScert))!=hash) { break; }
-        time_t t = time(NULL);
-        if (ASN1_TIME_to_DWORD(t, X509_get_notAfter(UScert)) - t < 0) { break; }
-        sto = X509_STORE_new();
-        if (!sto) { break; }
-        X509_STORE_add_cert(sto, CAcert);
-        ctx = X509_STORE_CTX_new();
-        if (!ctx) { break; }
-        X509_STORE_CTX_init(ctx, sto, UScert, NULL);
-        re = 1==X509_verify_cert(ctx);
-
-    } while (false);
-
-    if (ctx) {X509_STORE_CTX_free(ctx);}
-    if (sto) {X509_STORE_free(sto);}
-    if (UScert) {X509_free(UScert);}
-    if (bio) {BIO_free(bio);}
-
-    return re;
-}//checkX509
+  do  {
+    auto&&  it  =  specGroupX509s.find(groupID);
+    if (specGroupX509s.end()==it) {  break;  }
+    X509  *CAcert  =  it->second;
+    BIO  *bio  =  BIO_new_mem_buf(reinterpret_cast<const void *>(strX509),  strX509len);
+    if  (!bio)  {  break;  }
+    PEM_read_bio_X509(bio,  &UScert,  NULL,  NULL);
+    if  (!UScert)  {  break;  }
+    long  hash  =  avatarID  %  SPEC_LONG_MAX;
+    long  serial  =  ASN1_INTEGER_get(X509_get_serialNumber(UScert));
+    if  (serial  !=  hash)  {  break;  }
+    time_t  t  =  time(NULL);
+    if  ((ASN1_TIME_to_DWORD(t,  X509_get_notAfter(UScert))  -  t)
+        <  0)  {
+      break;
+    }
+    sto  =  X509_STORE_new();
+    if  (!sto)  {  break;  }
+    X509_STORE_add_cert(sto,  CAcert);
+    ctx  =  X509_STORE_CTX_new();
+    if  (!ctx)  {  break;  }
+    X509_STORE_CTX_init(ctx,  sto,  UScert,  NULL);
+    re  =  (1  ==  X509_verify_cert(ctx));
+  }  while  (false);
+  if  (ctx)  {  X509_STORE_CTX_free(ctx);  }
+  if  (sto)  {  X509_STORE_free(sto);  }
+  if  (UScert)  {  X509_free(UScert);  }
+  if  (bio)  {  BIO_free(bio);  }
+  return re;
+}  //  checkX509
 
 
-time_t SpecSSL::ASN1_TIME_to_DWORD(time_t curTime, ASN1_TIME * from)
-{
-    //time_t re = 0;
-    //struct tm t;
-    struct tm * timeinfo;
-    const char * str = (const char *)from->data;
-    int nYear, nMonth, nDay, nHour, nMin, nSec;
-
-    size_t i = 0;
-    if (V_ASN1_UTCTIME == from->type)
-    {//YYmmddHHMMSS
+time_t  SpecSSL::ASN1_TIME_to_DWORD(time_t  curTime,
+    ASN1_TIME  *from)  {
+  const char  *str  =  reinterpret_cast<const char *>(from->data);
+  int  nYear,  nMonth,  nDay,  nHour,  nMin,  nSec;
+  size_t  i  =  0;
+  if  (V_ASN1_UTCTIME  ==  from->type)  {
+    //YYmmddHHMMSS
         //t.tm_year
-        nYear = (str[i] - '0') * 10; ++i;
+    nYear  =  (str[i]  -  '0')  *  10;  ++i;
         //t.tm_year
-        nYear += (str[i] - '0'); ++i;
+    nYear  +=  (str[i] - '0');  ++i;
         //if (t.tm_year < 70) t.tm_year += 100;
-        if (nYear < 70) nYear += 2000;
-        else  nYear += 1900;
+    if  (nYear  <  70)  {
+      nYear  +=  2000;
+    }  else  {
+      nYear  +=  1900;
     }
-    else if (V_ASN1_GENERALIZEDTIME == from->type) {
+  }  else if  (V_ASN1_GENERALIZEDTIME == from->type)  {
         //t.tm_year
-        nYear = (str[i] - '0') * 1000; ++i;
+    nYear  =  (str[i]  -  '0')  *  1000;  ++i;
         //t.tm_year
-        nYear += (str[i] - '0') * 100; ++i;
+    nYear  +=  (str[i]  -  '0')  *  100;  ++i;
         //t.tm_year
-        nYear += (str[i] - '0') * 10; ++i;
+    nYear  +=  (str[i]  -  '0')  *  10;  ++i;
         //t.tm_year
-        nYear += (str[i] - '0'); ++i;
+    nYear  +=  (str[i]  -  '0');  ++i;
         //t.tm_year -= 1900;
-    }
-    else return 0;
+  }  else  {
+    return 0;
+  }
     //t.tm_mon
-    nMonth = (str[i] - '0') * 10; ++i;
+  nMonth  =  (str[i]  -  '0')  *  10;  ++i;
     //t.tm_mon
-    nMonth += (str[i] - '0'); ++i;
-
+  nMonth  +=  (str[i]  -  '0');  ++i;
     //t.tm_mday
-    nDay = (str[i] - '0') * 10; ++i;
+  nDay  =  (str[i]  -  '0')  *  10;  ++i;
     //t.tm_mday
-    nDay += (str[i] - '0'); ++i;
-
+  nDay  +=  (str[i]  -  '0');  ++i;
     //t.tm_hour
-    nHour = (str[i] - '0') * 10; ++i;
+  nHour  =  (str[i]  -  '0')  *  10;  ++i;
     //t.tm_hour
-    nHour += (str[i] - '0'); ++i;
-
+  nHour  +=  (str[i]  -  '0');  ++i;
     //t.tm_min
-    nMin = (str[i] - '0') * 10; ++i;
+  nMin  =  (str[i]  -  '0')  *  10;  ++i;
     //t.tm_min
-    nMin += (str[i] - '0'); ++i;
-
+  nMin  +=  (str[i] - '0');  ++i;
     //t.tm_sec
-    nSec = (str[i] - '0') * 10; ++i;
+  nSec  =  (str[i]  -  '0')  *  10;  ++i;
     //t.tm_sec
-    nSec += (str[i] - '0');
+  nSec  +=  (str[i]  -  '0');
     //++i;
-
-    timeinfo = localtime (&curTime);
+  struct  tm  timeinfo;
+  localtime_r(&curTime, &timeinfo);
     //timeinfo->tm_year = nYear - 1900;
-    timeinfo->tm_mon = nMonth - 1;
-    timeinfo->tm_mday = nDay;
-    timeinfo->tm_hour = nHour;
-    timeinfo->tm_min = nMin;
-    timeinfo->tm_sec = nSec;
+  timeinfo.tm_mon  =  nMonth - 1;
+  timeinfo.tm_mday  =  nDay;
+  timeinfo.tm_hour  =  nHour;
+  timeinfo.tm_min  =  nMin;
+  timeinfo.tm_sec  =  nSec;
 //https://stackoverflow.com/questions/14127013/mktime-returns-1-when-given-a-valid-struct-tm
   //говорят что работает тока в диапазоне ~ 13/12/1901 and 19/1/2038, поэтому:
-    if (nYear>=2038) {
+  if  (nYear >= 2038)  {
         nYear=2037;
-    }
-    timeinfo->tm_year = nYear - 1900;
-    return mktime(timeinfo);
-
-}
+  }
+  timeinfo.tm_year  =  nYear - 1900;
+  return mktime(&timeinfo);
+}  //  ASN1_TIME_to_DWORD
 
 
 bool SpecSSL::verify_it(const void* msg, size_t mlen, const void* sig, size_t slen, EVP_PKEY* evpX509)

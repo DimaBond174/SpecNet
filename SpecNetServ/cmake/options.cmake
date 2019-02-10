@@ -1,32 +1,38 @@
+# This is the source code of SpecNet project
+# It is licensed under MIT License.
+#
+#  Copyright (c) Dmitriy Bondarenko
+#  feel free to contact me: specnet.messenger@gmail.com
+
 # Inject Components:
 # warn: label name must be differen from class name (Error: declaration of anonymous class must be a definition)
 
-# Config module:
-set(SPEC_CONFIG  DConfigJson)
+## Config module:
+#set(SPEC_CONFIG  DConfigJson)
 
-# Logger module:
-set(SPEC_LOGGER  DSpecLog)
-#set(SPEC_LOGGER  DSpdLog)
+## Logger module:
+#set(SPEC_LOGGER  DSpecLog)
+##set(SPEC_LOGGER  DSpdLog)
 
-# File adapter module:
-set(SPEC_FILE  DFileAdapter)
+## File adapter module:
+#set(SPEC_FILE  DFileAdapter)
 
-# Database module:
-set(SPEC_DB  DSQLiteDB)
+## Database module:
+#set(SPEC_DB  DSQLiteDB)
 
-# Encryption module:
-set(SPEC_ENCRYPT DSpecSSL)
+## Encryption module:
+#set(SPEC_ENCRYPT DSpecSSL)
 
-# Server implementation module:
-#set(SPEC_SERV DDefServer)
-set(SPEC_SERV DEpollServer)
-#set(SPEC_SERV DSelectServer)
+## Server implementation module:
+##set(SPEC_SERV DDefServer)
+#set(SPEC_SERV DEpollServer)
+##set(SPEC_SERV DSelectServer)
 
-if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    set(SPEC_BUILD DDEBUG)
-else()
-    set(SPEC_BUILD DRELEASE)
-endif ()
+#if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+#    set(SPEC_BUILD DDEBUG)
+#else()
+#    set(SPEC_BUILD DRELEASE)
+#endif ()
 
 # Configuration of the assembly
 #   according to the selected components:
@@ -243,8 +249,6 @@ file(GLOB_RECURSE DEF_SRC
 )
 
 
-
-
 set(SPEC_SRC
     ${SPEC_SRC}
     ${DEF_SRC}
@@ -252,16 +256,6 @@ set(SPEC_SRC
 message("SPEC_SRC: ${SPEC_SRC}")
 
 # Output folder for binaries
-#SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${}/bin)
-#SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG  ${CMAKE_CURRENT_SOURCE_DIR}/bin)
-# это опирается на каталог откуда был запущен CMAKE:
-# https://github.com/OSVR/OSVR-Core/issues/555 :
-#set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-#set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-#set(SPEC_BUILD_DIR ${CMAKE_BINARY_DIR}/../bin_toCopy_toInstall)
-#set(SPEC_BUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/bin_toCopy_toInstall)
 set(SPEC_BUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/${SpecNetServ_INSTALL_FOLDER})
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${SPEC_BUILD_DIR}/libs)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${SPEC_BUILD_DIR}/libs)

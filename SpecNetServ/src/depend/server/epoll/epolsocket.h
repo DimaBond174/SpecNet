@@ -1,3 +1,11 @@
+/*
+ * This is the source code of SpecNet project
+ * It is licensed under MIT License.
+ *
+ * Copyright (c) Dmitriy Bondarenko
+ * feel free to contact me: specnet.messenger@gmail.com
+ */
+
 #ifndef EpolSocket_H
 #define EpolSocket_H
 
@@ -29,9 +37,9 @@ class EpolSocket  {
   int  connectState  =  0;  //0=not, 1=TCP, 2=SSL, 3=Authenticated
   uint64_t  connectedGroup  =  0;
   time_t  lastActTime  =  0;
-  bool  all_received  =  false;
+  //bool  all_received  =  false;
   int32_t  msgs_to_receive  =  0;
-  bool  all_sended  =  false;
+  //bool  all_sended  =  false;
   int32_t  msgs_to_send  =  0;
   int32_t  groups_count  =  0;
 
@@ -53,7 +61,7 @@ class EpolSocket  {
 
 //---------------------------------------------------------
 //EpolSocket Worker's staff:
-  SpecStack<IPack>  readStackWorker;
+
   X509  *x509  =  nullptr;
   EVP_PKEY  *evpX509  =  nullptr;
   int64_t  authed_groupID  =  0;

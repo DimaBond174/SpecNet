@@ -39,7 +39,7 @@ bool  SQLiteDB::start()  {
     db_mutex.unlock();
   }//if
   return re;
-}//start()
+}  //  start()
 
 void  SQLiteDB::stop()  {
   if (db_mutex.try_lock_for(std::chrono::milliseconds(DEADLOCK_TIME)))  {
@@ -103,7 +103,7 @@ bool  SQLiteDB::_execSQL(const char  *sql)  {
       log("e",  "[SQLiteDB]:[%s]:\n %s",  sql,  sqlite3_errmsg(db));
     sqlite3_free(zErrMsg);
   }
-  return re;
+  return  re;
 }
 
 bool  SQLiteDB::createDB()  {
@@ -192,7 +192,6 @@ int  SQLiteDB::callbackSQLite3(void  *NotUsed,  int  argc,  char **argv,
   return 0;
 }
 
-//TODO передавать только личные сообщения адресату или в группу
 
 //static const char *  sqlGetNewMessages =
 //        "select t1.date_msg, t1.id_msg from t_messages t1"\
@@ -378,37 +377,37 @@ void  SQLiteDB::delMsg(int64_t  id_group,  int64_t  id_msg,  int64_t  date_msg) 
   }//if
 }//delMsg
 
-static const char *  sqlGetMsgType9 =
-        "select remote_id_avatar, my_id_avatar"\
-        " from t_messages where date_msg=? and id_msg=? and id_group=?";
-bool SQLiteDB::getMsg(int64_t id_group, int64_t id_msg, int64_t date_msg,
-                        uint64_t * remote_id_avatar, uint64_t * my_id_avatar){
-    bool re = false;
-    if (db_mutex.try_lock_for(std::chrono::milliseconds(DEADLOCK_TIME))) {
+//static const char *  sqlGetMsgType9 =
+//        "select remote_id_avatar, my_id_avatar"\
+//        " from t_messages where date_msg=? and id_msg=? and id_group=?";
+bool  SQLiteDB::getMsg(int64_t  id_group,  int64_t  id_msg,  int64_t  date_msg,
+    uint64_t  *remote_id_avatar,  uint64_t  *my_id_avatar)  {
+  static constexpr ConstString  sqlGetMsgType9  {
+    "SELECT remote_id_avatar, my_id_avatar"\
+    " FROM t_messages WHERE date_msg=? AND id_msg=? AND id_group=?"
+  };
+  bool  re  =  false;
+  if  (db_mutex.try_lock_for(std::chrono::milliseconds(DEADLOCK_TIME)))  {
     //faux loop:
-        do {
-            if (!stmtGetMsgType9 || SQLITE_OK !=sqlite3_reset(stmtGetMsgType9)) {
-                //const char *pzTest;
-                 if (SQLITE_OK != sqlite3_prepare_v3(db, sqlGetMsgType9, strlen(sqlGetMsgType9),
-                                                     SQLITE_PREPARE_PERSISTENT, &stmtGetMsgType9, NULL)) {
-                     break;
-                 }
-            }
-            sqlite3_bind_int64(stmtGetMsgType9, 1, date_msg);
-            sqlite3_bind_int64(stmtGetMsgType9, 2, id_msg);
-            sqlite3_bind_int64(stmtGetMsgType9, 3, id_group);
-            if (SQLITE_ROW!=sqlite3_step(stmtGetMsgType9)){break;}
-            *remote_id_avatar = sqlite3_column_int64(stmtGetMsgType9, 0);
-            *my_id_avatar = sqlite3_column_int64(stmtGetMsgType9, 1);
-
-            re = true;
-        } while (false);
-        db_mutex.unlock();
-    }//if
-
-    return re;
-}//getMsg
-
+    do  {
+      if  (!stmtGetMsgType9  ||  SQLITE_OK != sqlite3_reset(stmtGetMsgType9))  {
+        if  (SQLITE_OK  !=  sqlite3_prepare_v3(db,  sqlGetMsgType9.c_str,
+            sqlGetMsgType9.size,  SQLITE_PREPARE_PERSISTENT,  &stmtGetMsgType9, NULL))  {
+          break;
+        }
+      }
+      sqlite3_bind_int64(stmtGetMsgType9,  1,  date_msg);
+      sqlite3_bind_int64(stmtGetMsgType9,  2,  id_msg);
+      sqlite3_bind_int64(stmtGetMsgType9,  3,  id_group);
+      if  (SQLITE_ROW  !=  sqlite3_step(stmtGetMsgType9))  {  break;  }
+      *remote_id_avatar  =  sqlite3_column_int64(stmtGetMsgType9,  0);
+      *my_id_avatar  =  sqlite3_column_int64(stmtGetMsgType9,  1);
+      re = true;
+    }  while  (false);
+    db_mutex.unlock();
+  }  //  if  mutex
+  return re;
+}  //  getMsg
 
 bool  SQLiteDB::storeNotNeedArray(int64_t  groupID,
     uint64_t  *msgIDsIN,  uint64_t  *msgDatesIN,  uint32_t  lenArrayIN,
@@ -442,51 +441,46 @@ bool  SQLiteDB::storeNotNeedArray(int64_t  groupID,
   return re;
 }  //storeNotNeedArray
 
-static const char *  sqlInsertMsg =
-        "insert into t_messages (date_msg,id_msg,id_group,remote_id_avatar,my_id_avatar) values (?,?,?,?,?)";
-bool SQLiteDB::storeMessage(int64_t id_group, int64_t remote_id_avatar, int64_t my_id_avatar,
-                              int64_t id_msg, int64_t date_msg){
-    bool re = false;
-    if (db_mutex.try_lock_for(std::chrono::milliseconds(DEADLOCK_TIME))) {
+//static const char *  sqlInsertMsg =
+//        "insert into t_messages (date_msg,id_msg,id_group,remote_id_avatar,my_id_avatar) values (?,?,?,?,?)";
+bool  SQLiteDB::storeMessage(int64_t  id_group,  int64_t  remote_id_avatar,  int64_t  my_id_avatar,
+    int64_t  id_msg,  int64_t  date_msg)  {
+  static constexpr ConstString  sqlInsertMsg  {
+    "INSERT INTO t_messages (date_msg,id_msg,id_group,remote_id_avatar,my_id_avatar) VALUES (?,?,?,?,?)"
+  };
+  bool  re  =  false;
+  if  (db_mutex.try_lock_for(std::chrono::milliseconds(DEADLOCK_TIME)))  {
     //faux loop:
-        do {
-            if (!stmtInsertMsg || SQLITE_OK !=sqlite3_reset(stmtInsertMsg)) {
-                //const char *pzTest;
-                 if (SQLITE_OK != sqlite3_prepare_v3(db, sqlInsertMsg, strlen(sqlInsertMsg),
-                                                     SQLITE_PREPARE_PERSISTENT, &stmtInsertMsg, NULL)) {
-                     break;
-                 }
-            }
-            sqlite3_bind_int64(stmtInsertMsg, 1, date_msg);
-            sqlite3_bind_int64(stmtInsertMsg, 2, id_msg);
-            sqlite3_bind_int64(stmtInsertMsg, 3, id_group);
-            sqlite3_bind_int64(stmtInsertMsg, 4, remote_id_avatar);
-            sqlite3_bind_int64(stmtInsertMsg, 5, my_id_avatar);
-            sqlite3_step(stmtInsertMsg);
-            re = true;
-        } while (false);
-        db_mutex.unlock();
-    }//if
-
-    return re;
+    do  {
+      if  (!stmtInsertMsg  ||  SQLITE_OK != sqlite3_reset(stmtInsertMsg))  {
+        if  (SQLITE_OK  !=  sqlite3_prepare_v3(db,  sqlInsertMsg.c_str,
+            sqlInsertMsg.size,  SQLITE_PREPARE_PERSISTENT,  &stmtInsertMsg,  NULL))  {
+          break;
+        }
+      }
+      sqlite3_bind_int64(stmtInsertMsg,  1,  date_msg);
+      sqlite3_bind_int64(stmtInsertMsg,  2,  id_msg);
+      sqlite3_bind_int64(stmtInsertMsg,  3,  id_group);
+      sqlite3_bind_int64(stmtInsertMsg,  4,  remote_id_avatar);
+      sqlite3_bind_int64(stmtInsertMsg,  5,  my_id_avatar);
+      sqlite3_step(stmtInsertMsg);
+      re  =  true;
+    }  while  (false);
+    db_mutex.unlock();
+  }  //  if mutex
+  return re;
 }
 
-
-
-
-bool  SQLiteDB::templateQuery(){
-    bool re = false;
-    if (db_mutex.try_lock_for(std::chrono::milliseconds(DEADLOCK_TIME))) {
+bool  SQLiteDB::templateQuery()  {
+  bool  re  =  false;
+  if  (db_mutex.try_lock_for(std::chrono::milliseconds(DEADLOCK_TIME)))  {
     //faux loop:
-        do {
-
-
-            re = true;
-        } while (false);
-        db_mutex.unlock();
-    }//if
-
-    return re;
+    do  {
+      re  =  true;
+    }  while  (false);
+    db_mutex.unlock();
+  }//if
+  return  re;
 }
 
 
