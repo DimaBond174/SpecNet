@@ -4,3 +4,5 @@
 !SpecNetServ/
 SpecNetServ/CMakeSettings.json
 SpecNetServ/.vs
+!private.png
+!public.png
