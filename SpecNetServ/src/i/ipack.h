@@ -511,7 +511,6 @@ class  OnCache  {
     return nullptr;
   }
 
-
   void  insertNode  (IPack  *data_)  {
     IPack  *data  =  new IPack(data_);
     IPackBody * b  =  data->p_body.get();
@@ -556,7 +555,6 @@ class  OnCache  {
   unsigned char  landscape_l[256];
   unsigned char  *land_l_p;
 
-
   uint64_t  getHash(TKey const  *key)  const  {
     const  uint64_t  re  =  key->key1  +  key->key2  +  key->key3;
     return  (re<9223372036854775807ll)?  re:  (re>>1);
@@ -573,6 +571,7 @@ class  OnCache  {
     if  (first->key3  <  first->key3)  return  -1;
     return 0;
   }
+
 
   void  init()  {
         //init basket lvl counters
@@ -652,12 +651,12 @@ class  OnCache  {
     }
   }
 
-  void allocNode(const  uint64_t  hash,  TKey const  *key,
-      IPack  *data,  const  uint32_t  basketID,  int  cmp)  {
+  void  allocNode(const uint64_t  hash,  TKey const  *key,
+      IPack  *data,  const uint32_t  basketID,  int  cmp)  {
     TONode  *re  =  nullptr;
     TONode  *prevHead  =  updatePathOut[0];
-    if  (_capacity  >  _size)  {
-      if  (leafSize  ==  leafAllocCounter)  {
+    if (_capacity  >  _size)  {
+      if (leafSize  ==  leafAllocCounter)  {
         *curLeaf_NextPtr  =  static_cast<TONode *>(malloc(sizeof(TONode * ) + leafSize * sizeof(TONode)));
         if  (*curLeaf_NextPtr)  {
                     //if alloc success
@@ -666,136 +665,149 @@ class  OnCache  {
           *curLeaf_NextPtr  =  nullptr;
           leafAllocCounter  =  0;
         }
-      } //if  (leafSize  ==
-      if  (leafSize  >  leafAllocCounter)  {
+      }
+      if (leafSize  >  leafAllocCounter)  {
         re  =  curLeaf  +  leafAllocCounter;
         ++_size;
         ++leafAllocCounter;
       }
-    }  //  if  (_capacity  >  _siz
-    // if can't alloc - reuse older one:
-    if  (!re)  {
+    }
+
+    if (!re)  {
             //reuse an older node
       re  =  headNode.leastUseful;
+//      if (re->key->keyArray[0]==37806435) {
+//          std::cout<<"\n";
+//      }
       headNode.leastUseful  =  re->mostUseful;
       re->mostUseful->leastUseful  =  &headNode;
-      if  (hash  ==  re->hash)  {
-        if  (re  !=  prevHead)  {
+            //check if this is head of basket:
+      if (hash  ==  re->hash)  {
+        if (re  ==  prevHead)  {
+          //cmp  =  777;
+          delete  (re->data);
+          //New leader = new:
+          re->mostUseful  =  &headNode;
+          re->leastUseful  =  headNode.mostUseful;
+          headNode.mostUseful->mostUseful  =  re;
+          if (&headNode  ==  headNode.leastUseful)  {
+              //The first became last too:
+            headNode.leastUseful  =  re;
+          }
+          headNode.mostUseful  =  re;
+          re->key  =  key;
+          re->data  =  data;
+          return;
+        }  else  {
           delInSameBasket(re);
           prevHead  =  updatePathOut[0];
-        } //else will replace at place
-      }  else if  (basketID  ==  (re->hash % _hash_baskets))  {
+        }
+      } else if (basketID  ==  re->hash % _hash_baskets)  {
         delInSameBasket(re);
         prevHead  =  updatePathOut[0];
-      } else {
+      }  else  {
         delInOtherBacket(re);
       }
-      delete (re->data);
-    }  //  if  (!re)
+      delete  (re->data);
+    }  //  if (!re)
+
 
     memset(re,  0,  sizeof(TONode));
+
         //New leader = new:
     re->mostUseful  =  &headNode;
     re->leastUseful  =  headNode.mostUseful;
     headNode.mostUseful->mostUseful  =  re;
-    if  (&headNode == headNode.leastUseful)  {
+    if (&headNode  ==  headNode.leastUseful)  {
             //The first became last too:
       headNode.leastUseful  =  re;
     }
     headNode.mostUseful  =  re;
     re->hash  =  hash;
-    if  (cmp>0)  {
+    if (cmp  >  0)  {
             //using update path
       re->key  =  key;
       re->data  =  data;
-      re->curHeight  =  (3==cmp)?
-        landscape_h[(land_h_p[basketID])++]
-        :  landscape_l[(land_l_p[basketID])++];
-      unsigned  char  i  =  0;
-      while  (i  <=  re->curHeight)  {
+      re->curHeight  =  (3  ==  cmp)?  landscape_h[(land_h_p[basketID])++]
+          :  landscape_l[(land_l_p[basketID])++];
+      int  i  =  0;
+      while (i  <=  re->curHeight)  {
         re->fwdPtrs[i]  =  updatePathOut[i]->fwdPtrs[i];
         updatePathOut[i]->fwdPtrs[i]  =  re;
         ++i;
       }
-      //      while (i  <  SKIPHEIGHT)  { memset(re,  0,  sizeof(TONode));
-      //        re->fwdPtrs[i]  =  nullptr;
-      //        ++i;
-      //      }
+//      while (i  <  SKIPHEIGHT)  { memset(re,  0,  sizeof(TONode));
+//        re->fwdPtrs[i]  =  nullptr;
+//        ++i;
+//      }
     }  else  {
-            //replace at place
-      if  (re  ==  prevHead)  {
-        re->key  =  key;
-        re->data  =  data;
-      }  else  {
+      //replace at place
         re->key  =  prevHead->key;
         re->data  =  prevHead->data;
         re->curHeight  =  landscape_l[(land_l_p[basketID])++];
         re->fwdPtrs[0]  =  prevHead->fwdPtrs[0];
         prevHead->fwdPtrs[0]  =  re;
-        if  (1==re->curHeight)  {
+        if (1  ==  re->curHeight)  {
           re->fwdPtrs[1]  =  prevHead->fwdPtrs[1];
           prevHead->fwdPtrs[1]  =  re;
         }
         prevHead->key  =  key;
         prevHead->data  =  data;
-      }
     }
-   return;
+    return;
   }  //  allocNode
 
+
   TONode * find(TKey const  *key)  {
-    const  uint64_t  hash  =  getHash(key);
-    const  uint32_t  basketID  =  hash  %  _hash_baskets;
-    TONode  *cur  =  &(baskets[basketID]);
-    int  h  =  4;
-    while  (  h>1  )  {
-      while  (cur->fwdPtrs[h]  &&  (hash  >  cur->fwdPtrs[h]->hash))  {
+    const uint64_t hash  =  getHash(key);
+    const uint32_t basketID  =  hash % _hash_baskets;
+    TONode * cur  =  &(baskets[basketID]);
+    int  h  =  4;//cur->curHeight;
+    while (h  >  1)  {
+      while (cur->fwdPtrs[h]  &&  hash  >  cur->fwdPtrs[h]->hash)  {
         cur  =  cur->fwdPtrs[h]; //step on it
       }
       --h;
-    } //while
+    }  //  while
 
 //same key jumps
-        if (cur->fwdPtrs[2] && hash == cur->fwdPtrs[2]->hash) {
+    if (cur->fwdPtrs[2] && hash  ==  cur->fwdPtrs[2]->hash)  {
             //step on same hash:
-             cur = cur->fwdPtrs[2];
+      cur  =  cur->fwdPtrs[2];
             //same hash found, next search for same key
-            //cmp = memcmp(key, cur->key, _keyLen);
-            int cmp = getCmp(key, cur->key);//key->cmp(cur->key);
-            if (cmp < 0) {
-                return nullptr; //nothing bigger with same hash
-            } else if (0==cmp) {
-                return cur;
-            }
+      int cmp  =  getCmp(key, cur->key); //key->cmp(cur->key);
+      if (cmp  <  0)  {
+        return nullptr; //nothing bigger with same hash
+      } else if (0  ==  cmp)  {
+        return cur;
+      }
 
-            while(cur->fwdPtrs[1] && hash==cur->fwdPtrs[1]->hash) {
-                //cmp = memcmp(key, cur->fwdPtrs[1]->key, _keyLen);
-                cmp = getCmp(key, cur->fwdPtrs[1]->key);// key->cmp(cur->fwdPtrs[1]->key);
-                if (cmp < 0) {
-                    //found who bigger
-                    break;
-                }
-                if (0==cmp) {
-                    return cur->fwdPtrs[1];
-                }
-                cur = cur->fwdPtrs[1]; //step on it
-            }
-
-            while(cur->fwdPtrs[0] && hash==cur->fwdPtrs[0]->hash) {
-                cmp = getCmp(key, cur->fwdPtrs[0]->key);// key->cmp(cur->fwdPtrs[0]->key);
-                if (cmp < 0) {
-                    //found who bigger
-                    return nullptr;
-                }
-                if (0==cmp) {
-                    return cur->fwdPtrs[0];
-                }
-                cur = cur->fwdPtrs[0]; //step on it
-            }
+      while (cur->fwdPtrs[1] && hash  ==  cur->fwdPtrs[1]->hash)  {
+        cmp  =  getCmp(key, cur->fwdPtrs[1]->key); //key->cmp(cur->fwdPtrs[1]->key);
+        if (cmp  <  0)  {
+          //found who bigger
+          break;
         }
+        if (0  ==  cmp)  {
+          return cur->fwdPtrs[1];
+        }
+        cur  =  cur->fwdPtrs[1]; //step on it
+      }
 
-        return nullptr;
-    } //find
+      while (cur->fwdPtrs[0] && hash  ==  cur->fwdPtrs[0]->hash)  {
+        cmp  =  cmp  =  getCmp(key, cur->fwdPtrs[0]->key); // key->cmp(cur->fwdPtrs[0]->key);
+        if (cmp  <  0)  {
+          //found who bigger
+          return nullptr;
+        }
+        if (0  ==  cmp)  {
+          return cur->fwdPtrs[0];
+        }
+        cur  =  cur->fwdPtrs[0]; //step on it
+      }
+    }
+    return nullptr;
+  }  //  find
 
 
     /*
@@ -804,354 +816,418 @@ class  OnCache  {
      * 3 == updatePath to insert node with new hash
      * 1 == updatePath to insert node with same hash
      * -N == node with same hash but bigger, to replace at place
-   */    
-  int setll(uint64_t  hash,  TKey const  *key,  const uint32_t  basketID)  {
-    TONode  *cur  =  &(baskets[basketID]);
-    int  h  =  4;//cur->curHeight;
-    while (h  >  1)  {
-      while (cur->fwdPtrs[h]  &&  hash > cur->fwdPtrs[h]->hash)  {
-        cur  =  cur->fwdPtrs[h]; //step on it
-      }
-      //Update path always point to node that point to bigger or equal one
-      updatePathOut[h]  =  cur;
-      --h;
-    } //while
-
-//same key jumps               
-    if (cur->fwdPtrs[2] && hash == cur->fwdPtrs[2]->hash)  {
-            //step on same hash:             
-      cur = cur->fwdPtrs[2];
-      int cmp = getCmp(key, cur->key);// key->cmp(cur->key);
-      if (cmp  <=  0) {
-        updatePathOut[0]  =  updatePathOut[1]  =  cur;
-        return cmp; //must replace hash head in place
-      }
-
-      while (cur->fwdPtrs[1]  &&  hash == cur->fwdPtrs[1]->hash)  {
-        cmp  =  getCmp(key,  cur->fwdPtrs[1]->key);// key->cmp(cur->fwdPtrs[1]->key);
-        if (cmp  <  0)  {
-          //found who bigger
-          break;
+   */
+    int  setll(uint64_t  hash,
+        TKey const  *key,  const uint32_t basketID)  {
+      TONode  *cur  =  &(baskets[basketID]);
+      int  h  =  4;  //cur->curHeight;
+      hashOut  =  hash;
+      while (h  >  1)  {
+        updatePathOut[h]  =  cur;
+        while (cur->fwdPtrs[h] && hash  >  cur->fwdPtrs[h]->hash)  {
+          cur  =  cur->fwdPtrs[h];  //step on it
+          updatePathOut[h]  =  cur;
         }
-        if (0  ==  cmp)  {
-          updatePathOut[0]  =  updatePathOut[1]  =  cur->fwdPtrs[1];
-          return 0; //must replace
+            //Update path always point to node that point to bigger or equal one
+        //updatePathOut[h] = cur;
+        //if (cur->fwdPtrs[h]  &&  hash <= cur->fwdPtrs[h]->hash)   {
+//        if (cur->fwdPtrs[h]  &&  hash >= cur->fwdPtrs[h]->hash)   {
+//          updatePathOut[h]  =  cur;
+//        }
+        --h;
+      } //while
+
+//same key jumps
+      if (cur->fwdPtrs[2] && hash  ==  cur->fwdPtrs[2]->hash)  {
+            //step on same hash:
+        cur  =  cur->fwdPtrs[2];
+            //same hash found, next search for same key
+        int  cmp  =  cmp  =  cmp  =  getCmp(key,  cur->key); //key->cmp(cur->key);
+        if (cmp  <=  0)  {
+          updatePathOut[0]  =  updatePathOut[1]  =  cur;
+          return cmp; //must replace hash head in place
+        }
+        //updatePathOut[2]  =  cur;
+        //step on queue head:
+        while (h  <  cur->curHeight)  {
+          ++h;
+          updatePathOut[h]  =  cur;
+        }
+        while (cur->fwdPtrs[1] && hash  ==  cur->fwdPtrs[1]->hash)  {
+          cmp  =  getCmp(key,  cur->fwdPtrs[1]->key);  // key->cmp(cur->fwdPtrs[1]->key);
+          if (cmp  <  0)  {
+            //found who bigger
+            break;
+          }
+          if (0  ==  cmp)  {
+            //updatePathOut[0]  =  cur->fwdPtrs[1];
+            updatePathOut[0]  =  updatePathOut[1]  =  cur->fwdPtrs[1];
+            return 0; //must replace
+          }
+          cur  =  cur->fwdPtrs[1]; //step on it
+        }
+        updatePathOut[1]  =  cur;
+
+        while (cur->fwdPtrs[0]  &&  hash == cur->fwdPtrs[0]->hash)  {
+          cmp  =  getCmp(key,  cur->fwdPtrs[0]->key); //key->cmp(cur->fwdPtrs[0]->key);
+          if (cmp  <  0)  {
+            //found who bigger
+            break;
+          }
+          if (0  ==  cmp)  {
+            updatePathOut[0]  =  cur->fwdPtrs[0];
+            return 0; //must replace
+          }
+          cur  =  cur->fwdPtrs[0]; //step on it
+        }
+        updatePathOut[0]  =  cur;
+        return 1; //base alhorithm==insert on updatePath
+      }  else  {
+        //scroll same hash:
+        hash  =  cur->hash;
+        while (cur->fwdPtrs[1]  &&  hash == cur->fwdPtrs[1]->hash)  {
+          cur  =  cur->fwdPtrs[1];
+        }
+        updatePathOut[1]  =  cur;
+        while (cur->fwdPtrs[0]  &&  hash == cur->fwdPtrs[0]->hash)  {
+          cur  =  cur->fwdPtrs[0];
+        }
+        updatePathOut[0]  =  cur;
+
+        return 3; //base alhorithm==insert on updatePath
+      }
+      return 3;
+    }
+
+    void  clearNodes(TONode  *nodes,  uint32_t  toClear) {
+      for (uint32_t  i  =  0;  i  <  toClear;  ++i)  {
+        if (nodes[i].data)  {
+          delete  (nodes[i].data);
+        }
+      }
+    }
+
+
+    void  delInOtherBacket(TONode  *nodeToDel)  {
+      const uint64_t  hash  =  nodeToDel->hash;
+      TONode  *cur  =  &(baskets[hash % _hash_baskets]);
+      TONode  *updatePath[SKIPHEIGHT];
+      int  h  =  4;  //cur->curHeight;
+//same hash jumps
+      while ( h>1 )  {
+        updatePath[h]  =  cur;
+        while (cur->fwdPtrs[h]
+               &&  hash >= cur->fwdPtrs[h]->hash
+               &&  nodeToDel != cur->fwdPtrs[h])  {
+          cur  =  cur->fwdPtrs[h];
+          updatePath[h]  =  cur;
+        }
+        //if (cur->fwdPtrs[h]  &&  hash  ==  cur->fwdPtrs[h]->hash)  {
+//        if (cur->fwdPtrs[h]  &&  hash <= cur->fwdPtrs[h]->hash)  {
+//          updatePath[h]  =  cur;
+//        }
+        --h;
+      } //while
+
+      //cur to first same hash 4
+      while (hash  !=  cur->fwdPtrs[1]->hash) {
+        cur  =  cur->fwdPtrs[1];
+      }
+      updatePath[1]  =  cur;
+
+      //same hash jumps
+      while (cur->fwdPtrs[1] && hash  ==  cur->fwdPtrs[1]->hash)  {
+        updatePath[1]  =  cur; //need in case of null==cur->fwdPtrs[1]
+        //if (nodeToDel->key->cmp(cur->fwdPtrs[1]->key)  <=  0)  {
+        if (getCmp(nodeToDel->key, cur->fwdPtrs[1]->key)   <=  0)  {
+          break;
         }
         cur  =  cur->fwdPtrs[1]; //step on it
       }
-      updatePathOut[1]  =  cur;
 
-      while (cur->fwdPtrs[0]  &&  hash == cur->fwdPtrs[0]->hash)  {
-        cmp  =  getCmp(key, cur->fwdPtrs[0]->key);// key->cmp(cur->fwdPtrs[0]->key);
-        if (cmp  <  0) {
-          //found who bigger
-          break;
-        }
-        if (0  ==  cmp)  {
-          updatePathOut[0]  =  cur->fwdPtrs[0];
-          return 0; //must replace
-        }
+      while (cur->fwdPtrs[0]  !=  nodeToDel)  {
         cur  =  cur->fwdPtrs[0]; //step on it
       }
-      updatePathOut[0]  =  cur;
-      return 1; //base alhorithm==insert on updatePath
-    }  else  {
-      //scroll same hash:
-      hash  =  cur->hash;
-      while (cur->fwdPtrs[1]  &&  hash == cur->fwdPtrs[1]->hash)  {
-        cur  =  cur->fwdPtrs[1];
-      }
-      updatePathOut[1]  =  cur;
-      while (cur->fwdPtrs[0]  &&  hash == cur->fwdPtrs[0]->hash)  {
-        cur  =  cur->fwdPtrs[0];
-      }
-      updatePathOut[0]  =  cur;
-      return 3; //base alhorithm==insert on updatePath
-    }
-    return 3;
-  }
-
-  void  clearNodes(TONode  *nodes,  uint32_t  toClear) {
-    for (uint32_t  i  =  0;  i  <  toClear;  ++i)  {
-      if (nodes[i].data)  {
-        delete  (nodes[i].data);
-      }
-    }
-  }
-
-
-    void delInOtherBacket(TONode * nodeToDel) {
-        const uint64_t hash = nodeToDel->hash;
-        TONode * cur = &(baskets[hash % _hash_baskets]);
-        TONode * updatePath[SKIPHEIGHT];
-       // TONode * tmpN = nullptr;
-       // long long cmp = 1; //not %found
-        int h = 4;//cur->curHeight;
-//same hash jumps
-
-        while ( h>1 ){
-            updatePath[h] = cur;
-            while (cur->fwdPtrs[h] && hash > cur->fwdPtrs[h]->hash) {
-                updatePath[h] = cur; //start from head that always smaller
-                cur = cur->fwdPtrs[h]; //step on it
-            }
-            if (cur->fwdPtrs[h]  &&  hash <= cur->fwdPtrs[h]->hash)  {
-              updatePath[h]  =  cur;
-            }
-            --h;
-        } // while
-
-        //same key jumps
-        while (cur->fwdPtrs[1] && hash==cur->fwdPtrs[1]->hash) {
-            updatePath[1] = cur; //need in case of null==cur->fwdPtrs[1]
-            //if (nodeToDel->key->cmp(cur->fwdPtrs[1]->key) <= 0) {
-            if (getCmp(nodeToDel->key, cur->fwdPtrs[1]->key) <= 0) {
-                break;
-            }
-            cur = cur->fwdPtrs[1]; //step on it
-        }
-
-        while (cur->fwdPtrs[0]  !=  nodeToDel)  {
-            cur  =  cur->fwdPtrs[0]; //step on it
-        }
-        updatePath[0] = cur;
-
-        if (updatePath[2]->fwdPtrs[2]  ==  nodeToDel)  {
-            //This is the head of hash queue:            
-          cur = nodeToDel->fwdPtrs[0]; //new head
-          if (cur  &&  cur->curHeight  <  nodeToDel->curHeight)  {
-            for (h = nodeToDel->curHeight;  h  >  cur->curHeight;  --h)  {
-              cur->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];  // new head see what nodeToDel see now
-              nodeToDel->fwdPtrs[h]  =  cur; // that will be used next for updatePath[h]->fwdPtrs[h]
-            }
-            cur->curHeight  =  nodeToDel->curHeight;
+      updatePath[0]  =  cur;
+      if (updatePath[2]->fwdPtrs[2]  ==  nodeToDel)  {
+            //This is the head of hash queue:
+        cur  =  nodeToDel->fwdPtrs[0]; //new head
+        //if (cur  &&  cur->curHeight  <  nodeToDel->curHeight)  {
+        if (cur  &&  cur->hash  ==  nodeToDel->hash)  {
+          for (h = nodeToDel->curHeight;  h  >  cur->curHeight;  --h)  {
+            cur->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];  // new head see what nodeToDel see now
+            nodeToDel->fwdPtrs[h]  =  cur; // that will be used next for updatePath[h]->fwdPtrs[h]
           }
-        }  //  if (updatePath[2]->fwdPtrs[2]  == 4
-        for ( h = nodeToDel->curHeight; h>=0; --h) {
-            updatePath[h]->fwdPtrs[h] = nodeToDel->fwdPtrs[h];
+          cur->curHeight  =  nodeToDel->curHeight;
         }
-        return;
+      }  //  if (updatePath[2]->fwdPtrs[2]  == 3
 
+      for (h  =  nodeToDel->curHeight;  h  >=  0;  --h)  {
+        updatePath[h]->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];
+      }
+      return;
     } //delInOtherBasket
 
-    void delInSameBasket(TONode * nodeToDel) {
-        for (int h = 4; h>=0; --h){
-            if (nodeToDel==updatePathOut[h]) {
-                //worst case - must do repath
-                delInSameBasketPathOut(nodeToDel, h);
-                return;
-            }
-            if (nodeToDel==updatePathOut[h]->fwdPtrs[h]) {
-                //best case - know where and how to update
-                delInSameBasketSuperFast(nodeToDel, h);
-                return;
-            }
+    void delInSameBasket(TONode  *nodeToDel)  {
+      for (int  h  =  4;  h  >=  0;  --h)  {
+        if (nodeToDel  ==  updatePathOut[h])  {
+          //worst case - must do repath
+          delInSameBasketPathOut(nodeToDel, h);
+          return;
         }
+        if (nodeToDel  ==  updatePathOut[h]->fwdPtrs[h])  {
+          //best case - know where and how to update
+          //just check if not on Path:
+          int h2  =  h  -  1;
+          while (h2  >=  0)  {
+            if (nodeToDel  ==  updatePathOut[h2])  {
+              //worst case - must do repath
+              delInSameBasketPathOut(nodeToDel, h2);
+              return;
+            }
+            --h2;
+          }
+          delInSameBasketSuperFast(nodeToDel, h);
+          return;
+        }
+      }
         //not on path == path not affected
-         delInSameBasketFast(nodeToDel);
-         return;
+      delInSameBasketFast(nodeToDel);
+      return;
     }
 
-    void delInSameBasketPathOut(TONode * nodeToDel, int top_h) {
+    void delInSameBasketPathOut(TONode  *nodeToDel,  int  top_h)  {
         //Node to del in updatePathOut[h], need path to it for update
-        const uint64_t hash = nodeToDel->hash;
-        TONode * updatePath[SKIPHEIGHT];
-        int h = 4;
-        TONode * cur = &(baskets[hash % _hash_baskets]);
-        while(h > top_h){
-            cur=updatePath[h] = updatePathOut[h];
-            --h;
-        }
+      //new path may be not the same
+      const uint64_t  hash  =  nodeToDel->hash;
+      TONode  *updatePath[SKIPHEIGHT];
+      int  h  =  4;
+      TONode  *cur  =  &(baskets[hash % _hash_baskets]);
+      if  (nodeToDel->curHeight  >  top_h)  {
+        top_h  =  nodeToDel->curHeight;
+      }
 
-        while (  h>1 ){
-            updatePath[h] = cur;
-            while (hash > cur->fwdPtrs[h]->hash) {
-                updatePath[h] = cur;
-                cur = cur->fwdPtrs[h];
-            }
-            if (cur->fwdPtrs[h]  &&  hash <= cur->fwdPtrs[h]->hash)  {
-              updatePath[h]  =  cur;
-            }
-            --h;
-        } //while
+      while (h  >  top_h)  {
+        cur  =  updatePath[h]  =  updatePathOut[h];
+        --h;
+      }
+      while (h  >  1)  {
+        updatePath[h]  =  cur;
+        //while (hash  >=  cur->fwdPtrs[h]->hash)  {
+        while (cur->fwdPtrs[h]
+               &&  hash >= cur->fwdPtrs[h]->hash
+               &&  nodeToDel != cur->fwdPtrs[h])  {
+          cur  =  cur->fwdPtrs[h];
+          updatePath[h]  =  cur;
+        }
+//        if (cur->fwdPtrs[h]  &&  hash <= cur->fwdPtrs[h]->hash)   {
+//          updatePath[h]  =  cur;
+//        }
+        --h;
+      } //while
+
+      //cur to first same hash 1
+      while (hash  !=  cur->fwdPtrs[1]->hash) {
+        cur  =  cur->fwdPtrs[1];
+      }
+      updatePath[1]  =  cur;
 
         //same key jumps
-        while (cur->fwdPtrs[1] && hash==cur->fwdPtrs[1]->hash) {
-            updatePath[1] = cur;
-            //if (nodeToDel->key->cmp(cur->fwdPtrs[1]->key) <= 0) {
-            if (getCmp(nodeToDel->key, cur->fwdPtrs[1]->key) <= 0) {
-                break;
-            }
-            cur = cur->fwdPtrs[1]; //step on it
+      while (cur->fwdPtrs[1] && hash  ==  cur->fwdPtrs[1]->hash)  {
+        updatePath[1]  =  cur;
+        //if (nodeToDel->key->cmp(cur->fwdPtrs[1]->key)  <=  0)  {
+        if (getCmp(nodeToDel->key, cur->fwdPtrs[1]->key)  <=  0)  {
+          break;
         }
-        //jumps on lvl 0:        
-        while (cur->fwdPtrs[0]  !=  nodeToDel)  {
-            cur  =  cur->fwdPtrs[0]; //step on it
-        }
-        updatePath[0]  =  cur;
+        cur  =  cur->fwdPtrs[1]; //step on it
+      }
 
-            //final update paths:            
-        if (updatePath[2]->fwdPtrs[2]  ==  nodeToDel)  {
-                //This is the head of hash queue:                
-          cur  =  nodeToDel->fwdPtrs[0]; //new head
-          if (cur  &&  cur->curHeight  <  nodeToDel->curHeight)  {
-            for (h = nodeToDel->curHeight;  h  >  cur->curHeight;  --h)  {
-              cur->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];  // new head see what nodeToDel see now
-              nodeToDel->fwdPtrs[h]  =  cur; // that will be used next for updatePath[h]->fwdPtrs[h]
-            }
-            cur->curHeight  =  nodeToDel->curHeight;
+      while (cur->fwdPtrs[0]  !=  nodeToDel)  {
+        cur  =  cur->fwdPtrs[0]; //step on it
+      }
+      updatePath[0]  =  cur;
+
+            //final update paths:
+      if (updatePath[2]->fwdPtrs[2]  ==  nodeToDel)  {
+        //This is the head of hash queue:
+        cur  =  nodeToDel->fwdPtrs[0]; //new head
+        if (cur  &&  cur->hash  ==  nodeToDel->hash)  {
+          for (h = nodeToDel->curHeight;  h  >  cur->curHeight;  --h)  {
+            cur->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];  // new head see what nodeToDel see now
+            nodeToDel->fwdPtrs[h]  =  cur; // that will be used next for updatePath[h]->fwdPtrs[h]
           }
-        }  //  if (updatePath[2]->fwdPtrs[2]  == 1
+          cur->curHeight  =  nodeToDel->curHeight;
+        }
+      }  //  if (updatePath[2]->fwdPtrs[2]  == 4
 
-        for (h  =  top_h;  h  >=  0;  --h)  {
-          updatePath[h]->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];
-          //replace deleted node :
-          if (nodeToDel  ==  updatePathOut[h])  {
-            //updatePathOut[h]  =  updatePath[h];
-            if (nodeToDel->fwdPtrs[h]
-                && nodeToDel->fwdPtrs[h]->hash <= hashOut)  {
-              updatePathOut[h]  =  nodeToDel->fwdPtrs[h];
-            }  else  {
-              updatePathOut[h]  =  updatePath[h];
-            }
+      for (h  =  top_h;  h  >=  0;  --h)  {
+        updatePath[h]->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];
+        //replace deleted node :
+        if (nodeToDel  ==  updatePathOut[h])  {
+          //updatePathOut[h]  =  updatePath[h];
+          if (nodeToDel->fwdPtrs[h]
+              && nodeToDel->fwdPtrs[h]->hash <= hashOut)  {
+            updatePathOut[h]  =  nodeToDel->fwdPtrs[h];
+          }  else  {
+            updatePathOut[h]  =  updatePath[h];
           }
         }
-        return;
-    }  //  delInSameBasketPathOut
+      }
+      return;
+    }//delInSameBasketPathOut
 
-    void delInSameBasketSuperFast(TONode * nodeToDel, int top_h) {
+    void delInSameBasketSuperFast(TONode  *nodeToDel,  int  top_h)  {
         //need path before to update pointers
-        const uint64_t hash = nodeToDel->hash;       
-        TONode * updatePath[SKIPHEIGHT];
-        updatePath[top_h] = updatePathOut[top_h];
-        TONode * cur = updatePathOut[top_h];
-        int h = top_h - 1;        
-        while (  h>1 )  {            
-            if (cur->hash < updatePathOut[h]->hash) {
-                cur = updatePathOut[h];
-            }
-            updatePath[h] = cur;
-            while (cur->fwdPtrs[h] && hash > cur->fwdPtrs[h]->hash) {
-                updatePath[h] = cur;
-                cur = cur->fwdPtrs[h];
-            }
-            if (cur->fwdPtrs[h]  &&  hash <= cur->fwdPtrs[h]->hash)  {
-              updatePath[h]  =  cur;
-            }
-            --h;
-        } //while
+      const uint64_t  hash  =  nodeToDel->hash;
+      TONode * updatePath[SKIPHEIGHT];
+      if  (nodeToDel->curHeight  >  top_h)  {
+        top_h  =  nodeToDel->curHeight;
+      }
+      updatePath[top_h]  =  updatePathOut[top_h];
+      TONode  *cur  =  updatePathOut[top_h];
+      int  h  =  top_h;
 
-        while (cur->fwdPtrs[1] && hash==cur->fwdPtrs[1]->hash) {
-            updatePath[1] = cur;
-            if (getCmp(nodeToDel->key, cur->fwdPtrs[1]->key) <= 0) {
-                break;
-            }
-            cur = cur->fwdPtrs[1]; //step on it
+      while (h  >  1)  {
+        if (nodeToDel->hash  <  updatePathOut[h]->hash)  {
+          cur  =  updatePathOut[h];
         }
-        //jumps on lvl 0:
-        while (cur->fwdPtrs[0]  !=  nodeToDel)  {
-          cur  =  cur->fwdPtrs[0]; //step on it
+        updatePath[h]  =  cur;
+        while (cur->fwdPtrs[h]
+               &&  hash >= cur->fwdPtrs[h]->hash
+               &&  nodeToDel != cur->fwdPtrs[h])  {
+          cur  =  cur->fwdPtrs[h];
+          updatePath[h]  =  cur;
         }
-        updatePath[0]  =  cur;
+//        if (cur->fwdPtrs[h]  &&  hash <= cur->fwdPtrs[h]->hash)   {
+//          updatePath[h]  =  cur;
+//        }
+        --h;
+      } //while
 
-            //final update paths:                        
-        if (updatePath[2]->fwdPtrs[2]  ==  nodeToDel)  {
-          //This is the head of hash queue:
-          cur  =  nodeToDel->fwdPtrs[0]; //new head
-          if (cur  &&  cur->curHeight  <  nodeToDel->curHeight)  {
-            for (h = nodeToDel->curHeight;  h  >  cur->curHeight;  --h)  {
-              cur->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];  // new head see what nodeToDel see now
-              nodeToDel->fwdPtrs[h]  =  cur; // that will be used next for updatePath[h]->fwdPtrs[h]
-            }
-            cur->curHeight  =  nodeToDel->curHeight;
+      //cur to first same hash 2
+      while (hash  !=  cur->fwdPtrs[1]->hash) {
+        cur  =  cur->fwdPtrs[1];
+      }
+      updatePath[1]  =  cur;
+
+        //same key jumps
+      while (cur->fwdPtrs[1] && hash  ==  cur->fwdPtrs[1]->hash)  {
+        updatePath[1]  =  cur;
+        //if (nodeToDel->key->cmp(cur->fwdPtrs[1]->key)  <=  0)  {
+        if (getCmp(nodeToDel->key, cur->fwdPtrs[1]->key)  <=  0)  {
+          break;
+        }
+        cur  =  cur->fwdPtrs[1]; //step on it
+      }
+
+      while (cur->fwdPtrs[0]  !=  nodeToDel)  {
+        cur  =  cur->fwdPtrs[0]; //step on it
+      }
+      updatePath[0]  =  cur;
+
+      //final update paths:
+      if (updatePath[2]->fwdPtrs[2]  ==  nodeToDel)  {
+        //This is the head of hash queue:
+        cur  =  nodeToDel->fwdPtrs[0]; //new head
+        if (cur  &&  cur->hash  ==  nodeToDel->hash)  {
+          for (h = nodeToDel->curHeight;  h  >  cur->curHeight;  --h)  {
+            cur->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];  // new head see what nodeToDel see now
+            nodeToDel->fwdPtrs[h]  =  cur; // that will be used next for updatePath[h]->fwdPtrs[h]
           }
-        }  //  if (updatePath[2]->fwdPtrs[2]  == 2
-
-        for ( h = top_h;  h  >=  0;  --h)  {
-          updatePath[h]->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];
+          cur->curHeight  =  nodeToDel->curHeight;
         }
+      }  //  if (updatePath[2]->fwdPtrs[2]  == 1
 
-        return;
+      for (h  =  top_h;  h  >=  0;  --h)  {
+        updatePath[h]->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];
+      }
+      return;
     }  //  delInSameBasketSuperFast
 
-    void delInSameBasketFast(TONode * nodeToDel) {
-        const uint64_t hash = nodeToDel->hash;
-        TONode * updatePath[SKIPHEIGHT];
-        int  h  =  4;
-        TONode * cur = &(baskets[hash % _hash_baskets]);        
-        while (h  >  1)  {
-            //Use all known info to narrow jump:
-            if (updatePathOut[h]->hash<=hash
-                    && cur->hash < updatePathOut[h]->hash) {
-                cur = updatePathOut[h];
-            }
+    void  delInSameBasketFast(TONode  *nodeToDel)  {
+      const uint64_t  hash  =  nodeToDel->hash;
+      TONode * updatePath[SKIPHEIGHT];
+      int  h  =  4;
+      TONode  *cur  =  &(baskets[hash % _hash_baskets]);
+      while (h  >  1)  {
+        //Use all known info to narrow jump:
+        if (updatePathOut[h]->hash <= hash
+            &&  cur->hash < updatePathOut[h]->hash)  {
+          cur  =  updatePathOut[h];
+        }
+        updatePath[h]  =  cur;
+        while (cur->fwdPtrs[h]
+               &&  hash >= cur->fwdPtrs[h]->hash
+               &&  nodeToDel != cur->fwdPtrs[h])  {
+          cur  =  cur->fwdPtrs[h];
+          updatePath[h]  =  cur;
+        }
+//        if (cur->fwdPtrs[h]  &&  hash <= cur->fwdPtrs[h]->hash)   {
+//          updatePath[h]  =  cur;
+//        }
+        --h;
+      } //while
 
-            updatePath[h] = cur;
-            while (cur->fwdPtrs[h] && hash > cur->fwdPtrs[h]->hash) {
-                updatePath[h] = cur;
-                cur = cur->fwdPtrs[h];
-            }
-            if (cur->fwdPtrs[h]  &&  hash <= cur->fwdPtrs[h]->hash)  {
-              updatePath[h]  =  cur;
-            }
-            --h;
-        } //while
+
+      //cur to first same hash 3
+      while (hash  !=  cur->fwdPtrs[1]->hash) {
+        cur  =  cur->fwdPtrs[1];
+      }
+      updatePath[1]  =  cur;
 
         //same key jumps
-        updatePath[1] = cur; //need in case of null==cur->fwdPtrs[1]
-        while (cur->fwdPtrs[1] && hash==cur->fwdPtrs[1]->hash) {
-            updatePath[1] = cur;
-
-            if (getCmp(nodeToDel->key, cur->fwdPtrs[1]->key) <= 0) {
-                break;
-            }
-            cur = cur->fwdPtrs[1]; //step on it
+      while (cur->fwdPtrs[1] && hash  ==  cur->fwdPtrs[1]->hash)  {
+        updatePath[1]  =  cur;
+        //if (nodeToDel->key->cmp(cur->fwdPtrs[1]->key)  <=  0)  {
+        if (getCmp(nodeToDel->key, cur->fwdPtrs[1]->key)  <=  0)  {
+          break;
         }
+        cur  =  cur->fwdPtrs[1]; //step on it
+      }
 
-        while (cur->fwdPtrs[0]  !=  nodeToDel)  {
-          cur  =  cur->fwdPtrs[0]; //step on it
-        }
-        updatePath[0]  =  cur;
+      while (cur->fwdPtrs[0]  !=  nodeToDel)  {
+        cur  =  cur->fwdPtrs[0]; //step on it
+      }
+      updatePath[0]  =  cur;
 
-        //final update paths:
-        if (updatePath[2]->fwdPtrs[2]  ==  nodeToDel)  {
-                //This is the head of hash queue:                
-          cur  =  nodeToDel->fwdPtrs[0]; //new head
-          if (cur  &&  cur->curHeight  <  nodeToDel->curHeight)  {
-            for (h = nodeToDel->curHeight;  h  >  cur->curHeight;  --h)  {
-              cur->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];  // new head see what nodeToDel see now
-              nodeToDel->fwdPtrs[h]  =  cur; // that will be used next for updatePath[h]->fwdPtrs[h]
-            }
-            cur->curHeight  =  nodeToDel->curHeight;
+      //final update paths:
+      if (updatePath[2]->fwdPtrs[2]  ==  nodeToDel)  {
+        //This is the head of hash queue:
+        cur  =  nodeToDel->fwdPtrs[0]; //new head
+        if (cur  &&  cur->hash  ==  nodeToDel->hash)  {
+          for (h = nodeToDel->curHeight;  h  >  cur->curHeight;  --h)  {
+            cur->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];  // new head see what nodeToDel see now
+            nodeToDel->fwdPtrs[h]  =  cur; // that will be used next for updatePath[h]->fwdPtrs[h]
           }
-        }  //  if (updatePath[2]->fwdPtrs[2]  == 3
-
-        for (h  =  nodeToDel->curHeight;  h  >=  0;  --h)  {
-          updatePath[h]->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];
+          cur->curHeight  =  nodeToDel->curHeight;
         }
-        return;
+      }  //  if (updatePath[2]->fwdPtrs[2]  == 2
+
+      for (h  =  nodeToDel->curHeight;  h  >=  0;  --h)  {
+        updatePath[h]->fwdPtrs[h]  =  nodeToDel->fwdPtrs[h];
+      }
+      return;
     }  //  delInSameBasketFast
 
-    void toTopUsage(TONode  *node)  {
+    void  toTopUsage(TONode  *node)  {
         //Exсlude:
-        if (node->mostUseful) {
-            node->mostUseful->leastUseful = node->leastUseful;
-        }
-        if (node->leastUseful) {
-            node->leastUseful->mostUseful = node->mostUseful;
-        }
+      if (node->mostUseful)  {
+        node->mostUseful->leastUseful  =  node->leastUseful;
+      }
+      if (node->leastUseful)  {
+        node->leastUseful->mostUseful  =  node->mostUseful;
+      }
 
         //New leader:
-        node->mostUseful = &headNode;
-        node->leastUseful = headNode.mostUseful;
-        headNode.mostUseful->mostUseful = node;
-        if (&headNode==headNode.leastUseful) {
-            //The first became last too:
-            headNode.leastUseful = node;
-        }
-        headNode.mostUseful = node;
+      node->mostUseful  =  &headNode;
+      node->leastUseful  =  headNode.mostUseful;
+      headNode.mostUseful->mostUseful  =  node;
+      if (&headNode   ==  headNode.leastUseful)  {
+        //The first became last too:
+        headNode.leastUseful  =  node;
+      }
+      headNode.mostUseful  =  node;
     }
-
 };
 
 
