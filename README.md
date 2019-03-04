@@ -11,6 +11,8 @@ Currently, software complex "SpecNet" consists of:
 * via the TCP/IP connection of the Internet / Wi-Fi network (works starting from API 19).
 2. SpecNet server for organizing a TCP/IP communication channel via the Internet or Wi-Fi network (implemented in C ++, tested under Linux. It is planned to complete the implementation for other common operating systems and to run directly on Wi-Fi equipment).
 
+How to build from sources and setup SpecNet you can read [here: WiKi](https://github.com/DimaBond174/SpecNet/wiki/1.-Setup-SpecNetServ): 
+
 As you develop for other devices and media, the source code will be uploaded to this repository.
 
 #### Work schemes:
@@ -71,7 +73,7 @@ Here will be a link to compiled binary..
 #### How to build a SpecNet Android app from source code:
 A link to WiKi will be posted here after I find time to modify the code according to the Google C ++ Style Guide and Google Java Style Guide.
 
-[Android application](https://play.google.com/store/apps/details?id=com.bond.specnet)
+[Android application: https://play.google.com/store/apps/details?id=com.bond.specnet](https://play.google.com/store/apps/details?id=com.bond.specnet)
 ---
   Copyright (c) Dmitriy Bondarenko
   feel free to contact me: specnet.messenger@gmail.com
