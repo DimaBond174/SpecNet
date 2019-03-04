@@ -11,7 +11,11 @@ Currently, software complex "SpecNet" consists of:
 * via the TCP/IP connection of the Internet / Wi-Fi network (works starting from API 19).
 2. SpecNet server for organizing a TCP/IP communication channel via the Internet or Wi-Fi network (implemented in C ++, tested under Linux. It is planned to complete the implementation for other common operating systems and to run directly on Wi-Fi equipment).
 
-How to build from sources and setup SpecNet you can read [here: WiKi](https://github.com/DimaBond174/SpecNet/wiki/1.-Setup-SpecNetServ): 
+How to build from sources and setup SpecNet you can read [here: WiKi](https://github.com/DimaBond174/SpecNet/wiki/1.-Setup-SpecNetServ)
+
+Android app you can get [here: Android application](https://play.google.com/store/apps/details?id=com.bond.specnet)
+
+Binary and apk install files [here: Artifactory](https://drive.google.com/open?id=1AdLupJ7z2Zy7gfZbRtf3hSYqKcX8iVdZ)
 
 As you develop for other devices and media, the source code will be uploaded to this repository.
 
@@ -64,16 +68,6 @@ Any SpecNet application can add itself to the default group, so there may be col
 SpecNetServ is only a transmission medium, there can be many servers, anywhere. When a site is specified in the SpecNet settings where to find the IP and port of the server, all the addresses found by tags will be added to the array and used to communicate in the specified order. Those. server loss is not critical, replication is not needed. The message will be delivered in any available way.
 If dictatorship or terrorists captures the server, then only encrypted files and a database with int64_t numbers will be detected on it.
 
----
-## Build/Install
-#### How to build a SpecNetServ server from source code:
-Here will be a link to WiKi..
-Here will be a link to compiled binary..
-
-#### How to build a SpecNet Android app from source code:
-A link to WiKi will be posted here after I find time to modify the code according to the Google C ++ Style Guide and Google Java Style Guide.
-
-[Android application: https://play.google.com/store/apps/details?id=com.bond.specnet](https://play.google.com/store/apps/details?id=com.bond.specnet)
 ---
   Copyright (c) Dmitriy Bondarenko
   feel free to contact me: specnet.messenger@gmail.com
